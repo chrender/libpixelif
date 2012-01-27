@@ -4,7 +4,7 @@
 include config.mk
 
 ifeq ($(fizmo_build_prefix),)
-  fizmo_build_prefix="$(prefix)"
+  fizmo_build_prefix="$(DESTDIR)$(prefix)"
 endif
 PKG_DIR = $(fizmo_build_prefix)/lib/pkgconfig
 PKGFILE = $(PKG_DIR)/libpixelif.pc
@@ -44,11 +44,11 @@ install-dev:: libpixelif.a
 	echo >>"$(PKGFILE)"
 
 install-locales::
-	mkdir -p "$(localedir)"
+	mkdir -p "$(DESTDIR)$(localedir)"
 	for l in `cd src/locales ; ls -d ??_??`; \
 	do \
-	  mkdir -p "$(localedir)/$$l" ; \
-	  cp src/locales/$$l/*.txt "$(localedir)/$$l" ; \
+	  mkdir -p "$(DESTDIR)$(localedir)/$$l" ; \
+	  cp src/locales/$$l/*.txt "$(DESTDIR)$(localedir)/$$l" ; \
 	done
 
 clean::
