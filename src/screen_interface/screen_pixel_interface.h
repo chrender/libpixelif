@@ -56,11 +56,8 @@
 
 struct z_screen_pixel_interface
 {
-  void (*goto_yx)(int y, int x);
-  void (*z_ucs_output)(z_ucs *z_ucs_output);
+  void (*draw_grayscale_pixel)(int y, int x, uint8_t pixel_value);
   bool (*is_input_timeout_available)();
-  void (*turn_on_input);
-  void (*turn_off_input);
   int (*get_next_event)(z_ucs *input, int timeout_millis);
 
   char* (*get_interface_name)();

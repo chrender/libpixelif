@@ -15,6 +15,10 @@ ifneq ($(ENABLE_TRACING),)
 override CFLAGS += -DENABLE_TRACING=
 endif
 
+ifneq ($(LIBFREETYPE2_CFLAGS),)
+override CFLAGS += $(LIBFREETYPE2_CFLAGS)
+endif
+
 LIBFIZMO_CFLAGS = $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config  \
  --cflags libfizmo)
 
