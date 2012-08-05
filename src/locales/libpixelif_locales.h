@@ -38,6 +38,7 @@
 #define i18n_libpixelif_TURNS 2
 #define i18n_libpixelif_LIBPIXELINTERFACE_VERSION_P0S 3
 #define i18n_libpixelif_PRESS_ANY_KEY_TO_QUIT 4
+#define i18n_libpixelif_FUNCTION_CALL_P0S_ABORTED_DUE_TO_ERROR 5
 
 extern z_ucs libpixelif_module_name[];
 
