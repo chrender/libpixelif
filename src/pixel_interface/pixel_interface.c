@@ -92,6 +92,9 @@ struct z_window
   WORDWRAP *wordwrapper;
 };
 
+// Z-Spec 8.8.1: The display is an array of pixels. Coordinates are usually
+// given (in units) in the form (y,x), with (1,1) in the top left.
+
 static char *screen_pixel_interface_version = LIBPIXELINTERFACE_VERSION;
 static FT_Library ftlibrary;
 static int screen_height = -1;
@@ -120,6 +123,7 @@ static int refresh_lines_to_output;
 static int last_split_window_size = 0;
 //static bool winch_found = false;
 static bool interface_open = false;
+static int font_height_in_pixel = 16;
 
 // Scrolling upwards:
 // It is always assumed that there's no output to window[0] and it's
@@ -927,7 +931,7 @@ static void link_interface_to_story(struct z_story *story)
   }
 
   ft_error = FT_New_Face(ftlibrary,
-     "/Users/chrender/git/fizmo-dist/LucidaSansRegular.ttf",
+     "LucidaSansRegular.ttf",
      0,
      &face);
 
@@ -955,8 +959,9 @@ static void link_interface_to_story(struct z_story *story)
   ft_error = FT_Set_Pixel_Sizes(
       face,   /* handle to face object */
       0,      /* pixel_width           */
-      16 );   /* pixel_height          */
+      font_height_in_pixel );   /* pixel_height          */
 
+  /*
   FT_UInt glyph_index = FT_Get_Char_Index( face, 'a');
 
   ft_error = FT_Load_Glyph(
@@ -985,6 +990,7 @@ static void link_interface_to_story(struct z_story *story)
   do
     event_type = screen_pixel_interface->get_next_event(&input, 0);
   while (event_type != EVENT_WAS_INPUT);
+  */
 
   if (ver >= 5)
   {
