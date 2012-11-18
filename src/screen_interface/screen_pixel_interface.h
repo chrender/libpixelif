@@ -74,8 +74,8 @@ struct z_screen_pixel_interface
   void (*set_colour)(z_colour foreground, z_colour background);
   void (*set_font)(z_font font_type);
   void (*output_interface_info)();
-  int (*get_screen_width)();
-  int (*get_screen_height)();
+  int (*get_screen_width_in_pixels)();
+  int (*get_screen_height_in_pixels)();
   void (*update_screen)();
   void (*redraw_screen_from_scratch)();
   void (*copy_area)(int dsty, int dstx, int srcy, int srcx, int height,
