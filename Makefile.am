@@ -34,8 +34,8 @@ install-dev:: libpixelif.a
 	echo 'Version: 0.1.0' >>$(PKGFILE)
 	echo 'Requires: libfizmo >= 0.7.5, $(LIBSNDIFSDL_REQS)' >>$(PKGFILE)
 	echo 'Requires.private:' >>$(PKGFILE)
-	echo 'Cflags: -I$(fizmo_build_prefix)/include/fizmo >>$(PKGFILE)
-	echo 'Libs: -L$(fizmo_build_prefix)/lib/fizmo -lpixelif >>$(PKGFILE)
+	echo 'Cflags: -I$(fizmo_build_prefix)/include/fizmo' >>$(PKGFILE)
+	echo 'Libs: -L$(fizmo_build_prefix)/lib/fizmo -lpixelif' >>$(PKGFILE)
 	echo >>$(PKGFILE)
 
 install-locales:
