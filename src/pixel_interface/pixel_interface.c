@@ -97,8 +97,8 @@ struct z_window
 
 static char *screen_pixel_interface_version = LIBPIXELINTERFACE_VERSION;
 static FT_Library ftlibrary;
-static int screen_height = -1;
-static int screen_width = -1;
+static int screen_height_in_pixel = -1;
+static int screen_width_in_pixel = -1;
 static int nof_active_z_windows = 0;
 static int statusline_window_id = -1;
 static int custom_left_margin = 0;
@@ -687,33 +687,33 @@ static bool is_picture_font_availiable()
 }
 
 
-static uint8_t get_screen_height()
+static uint8_t get_screen_height_in_pixel()
 {
-  if (screen_height < 0)
+  if (screen_height_in_pixel < 0)
     exit(-1);
   else
-    return screen_height;
+    return screen_height_in_pixel;
 }
 
 
-static uint8_t get_screen_width()
+static uint8_t get_screen_width_in_pixel()
 {
-  if (screen_width < 0)
+  if (screen_width_in_pixel < 0)
     exit(-1);
   else
-    return screen_width;
+    return screen_width_in_pixel;
 }
 
 
 static uint8_t get_screen_height_in_units()
 {
-  return get_screen_height();
+  return get_screen_height_in_pixel();
 }
 
 
 static uint8_t get_screen_width_in_units()
 {
-  return get_screen_width();
+  return get_screen_width_in_pixel();
 }
 
 
@@ -1010,8 +1010,8 @@ static void link_interface_to_story(struct z_story *story)
     }
   }
 
-  screen_height = screen_pixel_interface->get_screen_height();
-  screen_width = screen_pixel_interface->get_screen_width();
+  screen_height_in_pixel = screen_pixel_interface->get_screen_height_in_pixels();
+  screen_width_in_pixel = screen_pixel_interface->get_screen_width_in_pixels();
 
   if (ver <= 2)
     nof_active_z_windows = 1;
@@ -1046,8 +1046,8 @@ static void link_interface_to_story(struct z_story *story)
 
     if (i == 0)
     {
-      z_windows[i]->ysize = screen_height;
-      z_windows[i]->xsize = screen_width;
+      z_windows[i]->ysize = screen_height_in_pixel;
+      z_windows[i]->xsize = screen_width_in_pixel;
       z_windows[i]->scrolling_active = true;
       z_windows[i]->stream2copying_active = true;
       if (ver != 6)
@@ -1071,14 +1071,14 @@ static void link_interface_to_story(struct z_story *story)
       if (i == 1)
       {
         z_windows[i]->ysize = 0;
-        z_windows[i]->xsize = screen_width;
+        z_windows[i]->xsize = screen_width_in_pixel;
         if (statusline_window_id > 0)
           z_windows[i]->ypos++;
       }
       else if (i == statusline_window_id)
       {
         z_windows[i]->ysize = 1;
-        z_windows[i]->xsize = screen_width;
+        z_windows[i]->xsize = screen_width_in_pixel;
         z_windows[i]->text_style = Z_STYLE_REVERSE_VIDEO;
         z_windows[i]->output_text_style = Z_STYLE_REVERSE_VIDEO;
       }
@@ -1132,7 +1132,7 @@ static void link_interface_to_story(struct z_story *story)
   if (using_colors == true)
     screen_pixel_interface->set_colour(
         default_foreground_colour, default_background_colour);
-  screen_pixel_interface->clear_area(1, 1, screen_width, screen_height);
+  screen_pixel_interface->clear_area(1, 1, screen_width_in_pixel, screen_height_in_pixel);
 
   libpixelif_more_prompt
     = i18n_translate_to_string(
@@ -1241,8 +1241,8 @@ static void split_window(int16_t nof_lines)
 
   if (nof_lines >= 0)
   {
-    if (nof_lines > screen_height)
-      nof_lines = screen_height;
+    if (nof_lines > screen_height_in_pixel)
+      nof_lines = screen_height_in_pixel;
 
     lines_delta = nof_lines - z_windows[1]->ysize;
 
@@ -1570,7 +1570,7 @@ static void refresh_screen()
     switch_to_window(0);
   }
 
-  TRACE_LOG("Refreshing screen at %d*%d.\n", screen_width, screen_height);
+  TRACE_LOG("Refreshing screen at %d*%d.\n", screen_width_in_pixel, screen_height_in_pixel);
 
   refresh_count_mode = true;
 
@@ -2042,8 +2042,8 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
   int timeout_millis = -1, event_type, i;
   bool input_in_progress = true;
   z_ucs char_buf[] = { 0, 0 };
-  //int original_screen_width = screen_width;
-  //int original_screen_height = screen_height;
+  //int original_screen_width = screen_width_in_pixel;
+  //int original_screen_height = screen_height_in_pixel;
 
   int input_size = preloaded_input;
   int input_scroll_x = 0;
@@ -2841,7 +2841,7 @@ static void show_status(z_ucs *room_description, int status_line_mode,
   TRACE_LOG("\".\n");
 
   TRACE_LOG("statusline-xsize: %d, screen:%d.\n",
-      z_windows[statusline_window_id]->xsize, screen_width);
+      z_windows[statusline_window_id]->xsize, screen_width_in_pixel);
 
   if (statusline_window_id > 0)
   {
@@ -3058,8 +3058,8 @@ static struct z_screen_interface z_pixel_interface =
   &is_preloaded_input_available,
   &is_character_graphics_font_availiable,
   &is_picture_font_availiable,
-  &get_screen_height,
-  &get_screen_width,
+  &get_screen_height_in_pixel,
+  &get_screen_width_in_pixel,
   &get_screen_width_in_units,
   &get_screen_height_in_units,
   &get_font_width_in_units,
@@ -3139,15 +3139,15 @@ void new_pixel_screen_size(int newysize, int newxsize)
     consecutive_lines_buffer[i] = z_windows[i]->nof_consecutive_lines_output;
   disable_more_prompt = true;
 
-  dy = newysize - screen_height;
+  dy = newysize - screen_height_in_pixel;
 
-  screen_width = newxsize;
-  screen_height = newysize;
+  screen_width_in_pixel = newxsize;
+  screen_height_in_pixel = newysize;
 
-  fizmo_new_screen_size(screen_width, screen_height);
+  fizmo_new_screen_size(screen_width_in_pixel, screen_height_in_pixel);
 
   TRACE_LOG("new pixel-window-size: %d*%d.\n",
-      screen_width, screen_height);
+      screen_width_in_pixel, screen_height_in_pixel);
 
   z_windows[1]->ysize = last_split_window_size;
   if (last_split_window_size > newysize - status_offset)
@@ -3161,38 +3161,38 @@ void new_pixel_screen_size(int newysize, int newxsize)
     {
       if (i == 0)
       {
-        if (z_windows[0]->xsize < screen_width)
-          z_windows[0]->xsize = screen_width;
+        if (z_windows[0]->xsize < screen_width_in_pixel)
+          z_windows[0]->xsize = screen_width_in_pixel;
 
         z_windows[0]->ysize
-          = screen_height - status_offset - z_windows[1]->ysize;
+          = screen_height_in_pixel - status_offset - z_windows[1]->ysize;
 
         z_windows[0]->ycursorpos += dy;
       }
       else if (i == 1)
       {
-        if (z_windows[1]->xsize != screen_width)
-          z_windows[1]->xsize = screen_width;
+        if (z_windows[1]->xsize != screen_width_in_pixel)
+          z_windows[1]->xsize = screen_width_in_pixel;
       }
       else if (i == statusline_window_id)
       {
-        if (z_windows[statusline_window_id]->xsize != screen_width)
-          z_windows[statusline_window_id]->xsize = screen_width;
+        if (z_windows[statusline_window_id]->xsize != screen_width_in_pixel)
+          z_windows[statusline_window_id]->xsize = screen_width_in_pixel;
       }
     }
 
-    if (z_windows[i]->ypos > screen_height)
-      z_windows[i]->ypos = screen_height;
+    if (z_windows[i]->ypos > screen_height_in_pixel)
+      z_windows[i]->ypos = screen_height_in_pixel;
 
-    if (z_windows[i]->xpos > screen_width)
-      z_windows[i]->xpos = screen_width;
+    if (z_windows[i]->xpos > screen_width_in_pixel)
+      z_windows[i]->xpos = screen_width_in_pixel;
 
-    if (z_windows[i]->ypos + z_windows[i]->ysize > screen_height)
-      z_windows[i]->ysize = screen_height - z_windows[i]->ypos + 1;
+    if (z_windows[i]->ypos + z_windows[i]->ysize > screen_height_in_pixel)
+      z_windows[i]->ysize = screen_height_in_pixel - z_windows[i]->ypos + 1;
 
-    if (z_windows[i]->xpos + z_windows[i]->xsize > screen_width)
+    if (z_windows[i]->xpos + z_windows[i]->xsize > screen_width_in_pixel)
     {
-      z_windows[i]->xsize = screen_width - z_windows[i]->xpos + 1;
+      z_windows[i]->xsize = screen_width_in_pixel - z_windows[i]->xpos + 1;
 
       if (z_windows[i]->xsize - z_windows[i]->leftmargin
           - z_windows[i]->rightmargin < 1)
