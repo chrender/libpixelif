@@ -11,7 +11,7 @@ PKGFILE = $(PKG_DIR)/libpixelif.pc
 SUBDIRS = src/pixel_interface .
 noinst_LIBRARIES = libpixelif.a
 
-libpixelif.a:
+libpixelif.a::
 	cd src/pixel_interface ; make
 	mv src/pixel_interface/libpixelif.a .
 
