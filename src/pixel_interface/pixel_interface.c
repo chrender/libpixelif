@@ -55,6 +55,9 @@
 #include "../screen_interface/screen_pixel_interface.h"
 #include "../locales/libpixelif_locales.h"
 
+// 8.8.1
+// The display is an array of pixels. Coordinates are usually given (in units)
+// in the form (y,x), with (1,1) in the top left.
 
 struct z_window
 {
@@ -121,9 +124,11 @@ static bool refresh_count_mode;
 static int refresh_lines_to_skip;
 static int refresh_lines_to_output;
 static int last_split_window_size = 0;
-//static bool winch_found = false;
+static bool winch_found = false;
 static bool interface_open = false;
-static int font_height_in_pixel = 16;
+static int font_height_in_pixel = 24;
+static FT_Face face;
+static int line_height;
 
 // Scrolling upwards:
 // It is always assumed that there's no output to window[0] and it's
@@ -132,23 +137,23 @@ static int font_height_in_pixel = 16;
 // is terminated and the screen returns to the bottom of the output -- this
 // also automatically shows the new output which has arrived, which should in
 // most cases result from a interrupt routine.
-//static int top_upscroll_line = -1; // != -1 indicates upscroll is active.
-//static bool upscroll_hit_top = false;
-//static history_output *history; // shared by upscroll and screen-refresh
+static int top_upscroll_line = -1; // != -1 indicates upscroll is active.
+static bool upscroll_hit_top = false;
+static history_output *history; // shared by upscroll and screen-refresh
 //static int history_screen_line, last_history_screen_line;
 
 // This flag is set to true when an read_line is currently underway. It's
 // used by screen refresh functions like "new_pixel_screen_size".
 static bool input_line_on_screen = false;
-//static z_ucs *current_input_buffer = NULL;
-//static z_ucs newline_string[] = { '\n', 0 };
+static z_ucs *current_input_buffer = NULL;
+static z_ucs newline_string[] = { '\n', 0 };
 
-//static bool timed_input_active;
+static bool timed_input_active;
 
 static struct z_window **z_windows;
 static struct z_screen_pixel_interface *screen_pixel_interface = NULL;
 
-//static int *current_input_size, *current_input_scroll_x, *current_input_index;
+static int *current_input_size, *current_input_scroll_x, *current_input_index;
 static int *current_input_display_width, *current_input_x, *current_input_y;
 
 static char last_left_margin_config_value_as_string[MAX_MARGIN_AS_STRING_LEN];
@@ -156,6 +161,7 @@ static char last_right_margin_config_value_as_string[MAX_MARGIN_AS_STRING_LEN];
 
 static char *config_option_names[] = {
   "left-margin", "right-margin", "disable-hyphenation", "disable-color", NULL };
+
 
 static void refresh_cursor(int UNUSED(window_id))
 {
@@ -169,6 +175,75 @@ static void refresh_cursor(int UNUSED(window_id))
       z_windows[window_id]->ypos + z_windows[window_id]->ycursorpos - 1,
       z_windows[window_id]->xpos + z_windows[window_id]->xcursorpos - 1);
   */
+}
+
+
+static void draw_glyph(z_ucs charcode, int window_number) {
+  FT_GlyphSlot slot;
+  FT_Bitmap bitmap;
+  int x,y;
+  int ft_error;
+  int start_x = z_windows[window_number]->xcursorpos;
+  int screen_x = start_x;
+  int screen_y = z_windows[window_number]->ycursorpos;
+
+  TRACE_LOG("drawing glyph '%c' at %d, %d.\n", charcode, screen_x, screen_y);
+
+  FT_UInt glyph_index = FT_Get_Char_Index(face, charcode);
+
+  ft_error = FT_Load_Glyph(
+      face,
+      glyph_index,
+      FT_LOAD_DEFAULT);
+
+  ft_error = FT_Render_Glyph(
+      face->glyph,
+      FT_RENDER_MODE_NORMAL);
+
+  slot = face->glyph;
+
+  //screen_y += face->glyph->metrics.;
+
+  bitmap = slot->bitmap;
+
+  for (y=0; y<bitmap.rows; y++, screen_y++) {
+    for (x=0; x<bitmap.width; x++, screen_x++) {
+      screen_pixel_interface->draw_grayscale_pixel(
+          screen_y, screen_x, 255-bitmap.buffer[y*bitmap.width + x]);
+    }
+    screen_x = start_x;
+  }
+
+  // FIXME: Free glyph's memory.
+  // FT_Done_FreeType
+
+  z_windows[active_z_window_id]->xcursorpos
+    += (face->glyph->metrics.horiAdvance / 64);
+
+  if (z_windows[active_z_window_id]->xcursorpos
+      > z_windows[active_z_window_id]->xsize) {
+    z_windows[active_z_window_id]->xcursorpos
+      = 1 + z_windows[window_number]->leftmargin;
+    z_windows[active_z_window_id]->ycursorpos += line_height;
+
+    if (z_windows[active_z_window_id]->ycursorpos + line_height
+        > z_windows[active_z_window_id]->ysize) {
+      // FIXME: Scroll
+      z_windows[active_z_window_id]->ycursorpos = 0;
+    }
+  }
+}
+
+
+static void draw_glyph_string(z_ucs *z_ucs_output, int window_number) {
+  TRACE_LOG("drawing glyph string: \"");
+  TRACE_LOG_Z_UCS(z_ucs_output);
+  TRACE_LOG("\".\n");
+
+  while (*z_ucs_output != 0) {
+    draw_glyph(*z_ucs_output, window_number);
+    z_ucs_output++;
+  }
 }
 
 
@@ -247,7 +322,6 @@ static void update_output_text_style(int window_number)
 }
 
 
-/*
 static void flush_all_buffered_windows()
 {
   int i;
@@ -256,14 +330,16 @@ static void flush_all_buffered_windows()
     if (bool_equal(z_windows[i]->buffering, true))
       wordwrap_flush_output(z_windows[i]->wordwrapper);
 }
-*/
 
 
-void z_ucs_output_window_target(z_ucs *UNUSED(z_ucs_output),
-    void *UNUSED(window_number_as_void))
+void z_ucs_output_window_target(z_ucs *z_ucs_output,
+    void *window_number_as_void)
 {
-  /*
   int window_number = *((int*)window_number_as_void);
+
+  draw_glyph_string(z_ucs_output, window_number);
+
+  /*
   z_ucs input, event_type;
   z_ucs buf = 0; // init to 0 to calm compiler.
   z_ucs *linebreak;
@@ -870,18 +946,17 @@ static char **get_config_option_names()
 }
 
 
-static void z_ucs_output(z_ucs *UNUSED(z_ucs_output))
+static void z_ucs_output(z_ucs *z_ucs_output)
 {
-  /*
   TRACE_LOG("Output: \"");
   TRACE_LOG_Z_UCS(z_ucs_output);
-  TRACE_LOG("Output: \"");
   TRACE_LOG("\" to window %d, buffering: %d.\n",
       active_z_window_id,
       active_z_window_id != -1 ? z_windows[active_z_window_id]->buffering : -1);
 
-  if (active_z_window_id == -1)
-    screen_pixel_interface->z_ucs_output(z_ucs_output);
+  if (active_z_window_id == -1) {
+    draw_glyph_string(z_ucs_output, active_z_window_id);
+  }
   else
   {
     if (bool_equal(z_windows[active_z_window_id]->buffering, false))
@@ -900,7 +975,6 @@ static void z_ucs_output(z_ucs *UNUSED(z_ucs_output))
     }
   }
   TRACE_LOG("z_ucs_output finished.\n");
-  */
 }
 
 
@@ -910,10 +984,12 @@ static void link_interface_to_story(struct z_story *story)
   int len;
   int i;
   int ft_error;
+  /*
   FT_Face face;
   FT_GlyphSlot slot;
   FT_Bitmap bitmap;
   int x,y;
+  */
   int event_type;
   z_ucs input;
 
@@ -960,6 +1036,8 @@ static void link_interface_to_story(struct z_story *story)
       face,   /* handle to face object */
       0,      /* pixel_width           */
       font_height_in_pixel );   /* pixel_height          */
+
+  line_height = font_height_in_pixel + 2;
 
   /*
   FT_UInt glyph_index = FT_Get_Char_Index( face, 'a');
@@ -1010,8 +1088,10 @@ static void link_interface_to_story(struct z_story *story)
     }
   }
 
-  screen_height_in_pixel = screen_pixel_interface->get_screen_height_in_pixels();
-  screen_width_in_pixel = screen_pixel_interface->get_screen_width_in_pixels();
+  screen_height_in_pixel
+    = screen_pixel_interface->get_screen_height_in_pixels();
+  screen_width_in_pixel
+    = screen_pixel_interface->get_screen_width_in_pixels();
 
   if (ver <= 2)
     nof_active_z_windows = 1;
@@ -1077,7 +1157,7 @@ static void link_interface_to_story(struct z_story *story)
       }
       else if (i == statusline_window_id)
       {
-        z_windows[i]->ysize = 1;
+        z_windows[i]->ysize = line_height;
         z_windows[i]->xsize = screen_width_in_pixel;
         z_windows[i]->text_style = Z_STYLE_REVERSE_VIDEO;
         z_windows[i]->output_text_style = Z_STYLE_REVERSE_VIDEO;
@@ -1089,10 +1169,10 @@ static void link_interface_to_story(struct z_story *story)
       }
     }
 
-    //z_windows[i]->ycursorpos = (i == 1 ? 1 + z_windows[i]->ysize : 1);
-    //z_windows[i]->ycursorpos = z_windows[i]->ysize;
-    z_windows[i]->ycursorpos = (ver >= 5 ? 1 : z_windows[i]->ysize);
-    z_windows[i]->xcursorpos = 1 + z_windows[i]->leftmargin;
+    z_windows[i]->ycursorpos
+      = (ver >= 5 ? 1 : (z_windows[i]->ysize - line_height));
+    z_windows[i]->xcursorpos
+      = 1 + z_windows[i]->leftmargin;
 
     z_windows[i]->newline_routine = 0;
     z_windows[i]->interrupt_countdown = 0;
@@ -1132,7 +1212,8 @@ static void link_interface_to_story(struct z_story *story)
   if (using_colors == true)
     screen_pixel_interface->set_colour(
         default_foreground_colour, default_background_colour);
-  screen_pixel_interface->clear_area(1, 1, screen_width_in_pixel, screen_height_in_pixel);
+  screen_pixel_interface->clear_area(
+      1, 1, screen_width_in_pixel, screen_height_in_pixel);
 
   libpixelif_more_prompt
     = i18n_translate_to_string(
@@ -1322,7 +1403,7 @@ static void erase_window(int16_t window_number)
     z_windows[window_number]->xcursorpos
       = 1 + z_windows[window_number]->leftmargin;
     z_windows[window_number]->ycursorpos
-      = (ver >= 5 ? 1 : z_windows[window_number]->ysize);
+      = (ver >= 5 ? 1 : (z_windows[window_number]->ysize - line_height));
 
     z_windows[window_number]->nof_consecutive_lines_output = 0;
   }
@@ -1504,9 +1585,9 @@ static history_output_target history_target =
 */
 
 
-  /*
 static void refresh_input_line()
 {
+  /*
   z_ucs buf = 0;
   int last_active_z_window_id = -1;
 
@@ -1549,8 +1630,8 @@ static void refresh_input_line()
 
   if (last_active_z_window_id != -1)
     switch_to_window(last_active_z_window_id);
-}
   */
+}
 
 
 static void refresh_screen()
@@ -1813,9 +1894,9 @@ static void refresh_screen()
 }
 
 
-/*
 static void handle_scrolling(int event_type)
 {
+  /*
   int return_code;
 
   if (
@@ -2021,8 +2102,8 @@ static void handle_scrolling(int event_type)
 
     TRACE_LOG("Final top-upscroll line: %d.\n", top_upscroll_line);
   }
+  */
 }
-*/
 
 
 // NOTE: Keep in mind that the verification routine may recursively
@@ -2032,12 +2113,11 @@ static void handle_scrolling(int event_type)
 // terminated with a newline (in order to conform to V5+ games).
 // Returns -1 when int routine returns != 0
 // Returns -2 when user ended input with ESC
-static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
-    uint16_t UNUSED(tenth_seconds), uint32_t UNUSED(verification_routine),
-    uint8_t UNUSED(preloaded_input), int *UNUSED(tenth_seconds_elapsed),
-    bool UNUSED(disable_command_history), bool UNUSED(return_on_escape))
+static int16_t read_line(zscii *dest, uint16_t maximum_length,
+    uint16_t tenth_seconds, uint32_t verification_routine,
+    uint8_t preloaded_input, int *tenth_seconds_elapsed,
+    bool disable_command_history, bool return_on_escape)
 {
-  /*
   z_ucs input, buf;
   int timeout_millis = -1, event_type, i;
   bool input_in_progress = true;
@@ -2085,8 +2165,8 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
   if (winch_found == true)
   {
     new_pixel_screen_size(
-        screen_pixel_interface->get_screen_height(),
-        screen_pixel_interface->get_screen_width());
+        screen_pixel_interface->get_screen_height_in_pixels(),
+        screen_pixel_interface->get_screen_width_in_pixels());
     winch_found = false;
   }
 
@@ -2123,7 +2203,7 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
 
   input_y
     = z_windows[active_z_window_id]->ypos
-    + z_windows[active_z_window_id]->ycursorpos - 1;
+    + z_windows[active_z_window_id]->ycursorpos - 1 - line_height;
 
   input_display_width
     = z_windows[active_z_window_id]->xsize
@@ -2310,10 +2390,12 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
             input_buffer[input_scroll_x + input_display_width] = 0;
           }
 
+          /*
           screen_pixel_interface->goto_yx(input_y, input_x);
           screen_pixel_interface->z_ucs_output(input_buffer + input_scroll_x);
           if (buf != 0)
             input_buffer[input_scroll_x + input_display_width] = buf;
+          */
 
           refresh_cursor(active_z_window_id);
           screen_pixel_interface->update_screen();
@@ -2402,11 +2484,11 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
                 1,
                 input_display_width - 1);
 
-            screen_pixel_interface->goto_yx(input_y, input_x);
+            //screen_pixel_interface->goto_yx(input_y, input_x);
             char_buf[0] = input_buffer[input_scroll_x - 1];
             input_scroll_x--;
-            screen_pixel_interface->z_ucs_output(char_buf);
-            screen_pixel_interface->goto_yx(input_y, input_x);
+            //screen_pixel_interface->z_ucs_output(char_buf);
+            //screen_pixel_interface->goto_yx(input_y, input_x);
             //refresh_cursor(active_z_window_id);
             screen_pixel_interface->update_screen();
           }
@@ -2460,11 +2542,13 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
             // After determining how to fill the rightmost column, jump to
             // the correct position on-screen, display the new char and
             // re-position the cursor over the rightmost column.
+            /*
             screen_pixel_interface->goto_yx(input_y,
                 input_x + input_display_width - 1);
             screen_pixel_interface->z_ucs_output(char_buf);
             screen_pixel_interface->goto_yx(input_y,
                 input_x + input_display_width - 1);
+            */
 
             input_scroll_x++;
           }
@@ -2483,7 +2567,7 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
            (
             (event_type == EVENT_WAS_CODE_CURSOR_UP)
             &&
-            (cmd_history_index < command_history_nof_entries)
+            (cmd_history_index < get_number_of_stored_commands())
            )
            ||
            (
@@ -2495,20 +2579,6 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
          )
       {
         TRACE_LOG("old history index: %d.\n", cmd_history_index);
-
-        cmd_history_index += event_type == EVENT_WAS_CODE_CURSOR_UP ? 1 : -1;
-        if (cmd_history_index - 1 > command_history_newest_entry)
-          cmd_index
-            =  command_history_nof_entries
-            - (cmd_history_index - 1)
-            -  command_history_newest_entry;
-        else
-          cmd_index
-            = command_history_newest_entry - (cmd_history_index - 1);
-
-        cmd_history_ptr
-          = command_history_buffer
-          + command_history_entries[cmd_index];
 
         if (cmd_history_index > 0)
         {
@@ -2541,8 +2611,10 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
           else
             buf = 0;
 
+          /*
           screen_pixel_interface->goto_yx(input_y, input_x);
           screen_pixel_interface->z_ucs_output(input_buffer + input_scroll_x);
+          */
           if (buf != 0)
             input_buffer[input_scroll_x + input_display_width] = buf;
           screen_pixel_interface->clear_to_eol();
@@ -2553,7 +2625,7 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
           input_scroll_x = 0;
           input_index = 0;
           z_windows[active_z_window_id]->xcursorpos = input_x;
-          screen_pixel_interface->goto_yx(input_y, input_x);
+          //screen_pixel_interface->goto_yx(input_y, input_x);
           screen_pixel_interface->clear_to_eol();
         }
 
@@ -2564,8 +2636,8 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
       {
         TRACE_LOG("timeout.\n");
         new_pixel_screen_size(
-            screen_pixel_interface->get_screen_height(),
-            screen_pixel_interface->get_screen_width());
+            screen_pixel_interface->get_screen_height_in_pixels(),
+            screen_pixel_interface->get_screen_width_in_pixels());
       }
       else if (event_type == EVENT_WAS_CODE_CTRL_A)
       {
@@ -2578,8 +2650,10 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
               ? input_display_width : input_size;
             char_buf[0] = input_buffer[index];
             input_buffer[index] = 0;
+            /*
             screen_pixel_interface->goto_yx(input_y, input_x);
             screen_pixel_interface->z_ucs_output(input_buffer);
+            */
             input_buffer[index] = char_buf[0];
           }
 
@@ -2597,8 +2671,10 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
         if (input_size > input_display_width - 1)
         {
           input_scroll_x = input_size - input_display_width + 1;
+          /*
           screen_pixel_interface->goto_yx(input_y, input_x);
           screen_pixel_interface->z_ucs_output(input_buffer + input_scroll_x);
+          */
           screen_pixel_interface->clear_to_eol();
           z_windows[active_z_window_id]->xcursorpos
             = input_x + input_display_width - 1;
@@ -2629,7 +2705,7 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
   }
   TRACE_LOG("x-readline-ycursorpos: %d.\n", z_windows[0]->ycursorpos);
 
-  screen_pixel_interface->goto_yx(input_y, input_x);
+  //screen_pixel_interface->goto_yx(input_y, input_x);
   screen_pixel_interface->clear_to_eol();
   z_windows[active_z_window_id]->xcursorpos
     = input_x - (z_windows[active_z_window_id]->xpos - 1);
@@ -2646,8 +2722,6 @@ static int16_t read_line(zscii *UNUSED(dest), uint16_t UNUSED(maximum_length),
   TRACE_LOG("len:%d\n", input_size);
   TRACE_LOG("after-readline-ycursorpos: %d.\n", z_windows[0]->ycursorpos);
   return input_size;
-  */
-  return -1;
 }
 
 
@@ -2891,6 +2965,7 @@ static void show_status(z_ucs *room_description, int status_line_mode,
     }
     else if (status_line_mode == SCORE_MODE_TIME)
     {
+      // FIXME:
       room_desc_space = z_windows[statusline_window_id]->xsize - 8;
 
       if (room_desc_space < desc_len)
@@ -2904,7 +2979,7 @@ static void show_status(z_ucs *room_description, int status_line_mode,
       z_ucs_output(room_description);
 
       z_windows[statusline_window_id]->xcursorpos
-        = z_windows[statusline_window_id]->xsize - 5;
+        = z_windows[statusline_window_id]->xsize - 100;
       refresh_cursor(statusline_window_id);
 
       sprintf(latin1_buf, "%02d:%02d", parameter1, parameter2);
@@ -3176,8 +3251,8 @@ void new_pixel_screen_size(int newysize, int newxsize)
       }
       else if (i == statusline_window_id)
       {
-        if (z_windows[statusline_window_id]->xsize != screen_width_in_pixel)
-          z_windows[statusline_window_id]->xsize = screen_width_in_pixel;
+        //if (z_windows[statusline_window_id]->xsize != screen_width_in_pixel)
+        z_windows[statusline_window_id]->xsize = screen_width_in_pixel;
       }
     }
 
@@ -3208,7 +3283,7 @@ void new_pixel_screen_size(int newysize, int newxsize)
     }
 
     if (z_windows[i]->ycursorpos > z_windows[i]->ysize)
-      z_windows[i]->ycursorpos = z_windows[i]->ysize;
+      z_windows[i]->ycursorpos = z_windows[i]->ysize - line_height;
 
     TRACE_LOG("new ycursorpos[%d]: %d\n", i, z_windows[i]->ycursorpos);
 
