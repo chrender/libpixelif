@@ -126,8 +126,8 @@ static int refresh_lines_to_output;
 static int last_split_window_size = 0;
 static bool winch_found = false;
 static bool interface_open = false;
-static int font_height_in_pixel = 24;
 static FT_Face face;
+static int font_height_in_pixel = 16;
 static int line_height;
 
 // Scrolling upwards:
@@ -178,16 +178,49 @@ static void refresh_cursor(int UNUSED(window_id))
 }
 
 
-static void draw_glyph(z_ucs charcode, int window_number) {
+static void break_line(int window_number) {
+  z_windows[window_number]->xcursorpos
+    = 1 + z_windows[window_number]->leftmargin;
+
+  if (z_windows[window_number]->ycursorpos + line_height
+      > z_windows[window_number]->ysize) {
+    screen_pixel_interface->copy_area(
+        z_windows[window_number]->ypos,
+        z_windows[window_number]->xpos,
+        z_windows[window_number]->ypos + line_height,
+        z_windows[window_number]->xpos,
+        z_windows[window_number]->ysize - line_height,
+        z_windows[window_number]->xsize);
+    fill_area(
+        z_windows[window_number]->xpos,
+        z_windows[window_number]->ypos
+        + z_windows[window_number]->ysize - line_height,
+        z_windows[window_number]->xsize,
+        line_height,
+        z_windows[window_number]->output_background_colour);
+    //new_z_rgb_color(255, 255, 255));
+  }
+  else {
+    z_windows[window_number]->ycursorpos += line_height;
+  }
+}
+
+
+static void draw_glyph(z_ucs charcode, z_ucs following_charcode,
+    int window_number) {
   FT_GlyphSlot slot;
   FT_Bitmap bitmap;
+  FT_Vector kerning;
   int x,y;
   int ft_error;
-  int start_x = z_windows[window_number]->xcursorpos;
-  int screen_x = start_x;
-  int screen_y = z_windows[window_number]->ycursorpos;
+  int screen_x, screen_y, advance, start_x;
+  int error;
+  FT_Bool use_kerning;
 
-  TRACE_LOG("drawing glyph '%c' at %d, %d.\n", charcode, screen_x, screen_y);
+  if (charcode == Z_UCS_NEWLINE) {
+    break_line(window_number);
+    return;
+  }
 
   FT_UInt glyph_index = FT_Get_Char_Index(face, charcode);
 
@@ -202,48 +235,85 @@ static void draw_glyph(z_ucs charcode, int window_number) {
 
   slot = face->glyph;
 
-  //screen_y += face->glyph->metrics.;
+  // FIXME: Free glyph's memory.
+  // FT_Done_FreeType
+  
+  use_kerning = FT_HAS_KERNING( face );
+
+  //advance = face->glyph->metrics.horiAdvance / 64;
+  advance = slot->advance.x / 64;
+
+  if ( (following_charcode != 0) && (use_kerning) ) {
+    error = FT_Get_Kerning(face, charcode, following_charcode,
+        FT_KERNING_DEFAULT, &kerning);
+    if (error) {
+      printf("error: %d\n", error);
+      exit -1;
+    }
+    advance += kerning.x / 64;
+  }
+
+  if (z_windows[window_number]->xcursorpos + advance
+      > z_windows[window_number]->xsize) {
+    break_line(window_number);
+  }
 
   bitmap = slot->bitmap;
 
+  /*
+  screen_x = z_windows[window_number]->xcursorpos;
+  screen_y = z_windows[window_number]->ycursorpos
+    + face->size->metrics.ascender/64
+    - face->glyph->metrics.horiBearingY/64;
+    */
+
+  start_x = z_windows[window_number]->xcursorpos + slot->bitmap_left;
+  screen_y = z_windows[window_number]->ycursorpos
+    + face->size->metrics.ascender/64
+    - slot->bitmap_top;
+
+  TRACE_LOG("drawing glyph '%c' at %d, %d.\n", charcode, screen_x, screen_y);
+  /*
+  printf("drawing glyph '%c' at %d, %d / %d, %d.\n",
+      charcode, screen_x, screen_y, face->size->metrics.ascender,
+      face->glyph->metrics.height);
+  */
+
   for (y=0; y<bitmap.rows; y++, screen_y++) {
+    screen_x = start_x;
     for (x=0; x<bitmap.width; x++, screen_x++) {
+      /*
+      printf("%d / %d, %d*%d\n", screen_x, screen_y,
+          bitmap.width, bitmap.rows);
+      */
       screen_pixel_interface->draw_grayscale_pixel(
           screen_y, screen_x, 255-bitmap.buffer[y*bitmap.width + x]);
     }
-    screen_x = start_x;
   }
 
-  // FIXME: Free glyph's memory.
-  // FT_Done_FreeType
-
-  z_windows[active_z_window_id]->xcursorpos
-    += (face->glyph->metrics.horiAdvance / 64);
-
-  if (z_windows[active_z_window_id]->xcursorpos
-      > z_windows[active_z_window_id]->xsize) {
-    z_windows[active_z_window_id]->xcursorpos
-      = 1 + z_windows[window_number]->leftmargin;
-    z_windows[active_z_window_id]->ycursorpos += line_height;
-
-    if (z_windows[active_z_window_id]->ycursorpos + line_height
-        > z_windows[active_z_window_id]->ysize) {
-      // FIXME: Scroll
-      z_windows[active_z_window_id]->ycursorpos = 0;
-    }
-  }
+  z_windows[window_number]->xcursorpos += advance;
 }
 
 
 static void draw_glyph_string(z_ucs *z_ucs_output, int window_number) {
+  z_ucs current_char, next_char;
+
   TRACE_LOG("drawing glyph string: \"");
   TRACE_LOG_Z_UCS(z_ucs_output);
   TRACE_LOG("\".\n");
 
-  while (*z_ucs_output != 0) {
-    draw_glyph(*z_ucs_output, window_number);
-    z_ucs_output++;
+  if ((current_char = *(z_ucs_output++)) == 0)
+    return;
+
+  next_char = *(z_ucs_output++);
+
+  while (next_char != 0) {
+    draw_glyph(current_char, next_char, window_number);
+    current_char = next_char;
+    next_char = *(z_ucs_output++);
   }
+
+  draw_glyph(current_char, 0, window_number);
 }
 
 
@@ -1037,7 +1107,7 @@ static void link_interface_to_story(struct z_story *story)
       0,      /* pixel_width           */
       font_height_in_pixel );   /* pixel_height          */
 
-  line_height = font_height_in_pixel + 2;
+  line_height = font_height_in_pixel + 4;
 
   /*
   FT_UInt glyph_index = FT_Get_Char_Index( face, 'a');
@@ -1137,8 +1207,8 @@ static void link_interface_to_story(struct z_story *story)
       }
       if (statusline_window_id > 0)
       {
-        z_windows[i]->ysize--;
-        z_windows[i]->ypos++;
+        z_windows[i]->ysize -= line_height;
+        z_windows[i]->ypos += line_height;
       }
     }
     else
@@ -1212,8 +1282,8 @@ static void link_interface_to_story(struct z_story *story)
   if (using_colors == true)
     screen_pixel_interface->set_colour(
         default_foreground_colour, default_background_colour);
-  screen_pixel_interface->clear_area(
-      1, 1, screen_width_in_pixel, screen_height_in_pixel);
+  //screen_pixel_interface->fill_area(
+  //    1, 1, screen_width_in_pixel, screen_height_in_pixel);
 
   libpixelif_more_prompt
     = i18n_translate_to_string(
@@ -1360,12 +1430,15 @@ static void split_window(int16_t nof_lines)
           z_windows[0]->ycursorpos,
           z_windows[0]->ypos);
 
-      if (ver == 3)
+      if (ver == 3) {
+        /*
         screen_pixel_interface->clear_area(
             z_windows[1]->xpos,
             z_windows[1]->ypos,
             z_windows[1]->xsize,
             z_windows[1]->ysize);
+        */
+      }
     }
 
     last_split_window_size = nof_lines;
@@ -1394,11 +1467,13 @@ static void erase_window(int16_t window_number)
     update_output_colours(window_number);
     update_output_text_style(window_number);
 
+    /*
     screen_pixel_interface->clear_area(
         z_windows[window_number]->xpos,
         z_windows[window_number]->ypos,
         z_windows[window_number]->xsize,
         z_windows[window_number]->ysize);
+    */
 
     z_windows[window_number]->xcursorpos
       = 1 + z_windows[window_number]->leftmargin;
@@ -2156,9 +2231,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
   {
     TRACE_LOG("breaking line, too short for input.\n");
 
-    z_ucs_output_window_target(
-        newline_string,
-        (void*)(&z_windows[active_z_window_id]->window_number));
+    break_line(active_z_window_id);
     refresh_screen();
   }
 
