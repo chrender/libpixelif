@@ -5,7 +5,8 @@ LDADD = $(libfizmo_LIBS) $(freetype2_LIBS)
 localedir = $(datarootdir)/fizmo/locales
 
 noinst_LIBRARIES = libpixelif.a
-libpixelif_a_SOURCES = ../locales/libpixelif_locales.c pixel_interface.c
+libpixelif_a_SOURCES = ../locales/libpixelif_locales.c pixel_interface.c \
+  freetype_wordwrapper.c
 
 if ENABLE_TRACING
 AM_CFLAGS += -DENABLE_TRACING=
