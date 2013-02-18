@@ -238,6 +238,7 @@ void freetype_wrap_z_ucs(freetype_wordwrapper *wrapper, z_ucs *input) {
 
 
 void freetype_wordwrap_flush_output(freetype_wordwrapper* wrapper) {
+  printf("flush-ww\n");
   ensure_additional_buffer_capacity(wrapper, 1);
   wrapper->input_buffer[wrapper->current_buffer_index] = 0;
   wrapper->wrapped_text_output_destination(wrapper->input_buffer,
@@ -250,7 +251,7 @@ void freetype_wordwrap_flush_output(freetype_wordwrapper* wrapper) {
 
 void freetype_wordwrap_insert_metadata(freetype_wordwrapper *wrapper,
     void (*metadata_output)(void *ptr_parameter, uint32_t int_parameter),
-    void *ptr_parameter, uint32_t int_parameter) {
+    void *ptr_parameter, uint32_t int_parameter, FT_Face new_face) {
   size_t bytes_to_allocate;
   
   // Before adding new metadata, check if we need to allocate more space.
@@ -286,6 +287,8 @@ void freetype_wordwrap_insert_metadata(freetype_wordwrapper *wrapper,
     = ptr_parameter;
   wrapper->metadata[wrapper->metadata_index].int_parameter
     = int_parameter;
+  wrapper->metadata[wrapper->metadata_index].new_face
+    = new_face;
 
   TRACE_LOG("Added new metadata entry at %ld with int-parameter %ld, ptr:%p.\n",
       wrapper->current_buffer_index,

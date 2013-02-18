@@ -35,12 +35,12 @@
 
 #include "tools/types.h"
 
-struct freetype_wordwrap_metadata
-{
+struct freetype_wordwrap_metadata {
   long output_index;
   void (*metadata_output_function)(void *ptr_parameter, uint32_t int_parameter);
   void *ptr_parameter;
   uint32_t int_parameter;
+  FT_Face new_face;
 };
 
 
@@ -69,7 +69,7 @@ void freetype_wrap_z_ucs(freetype_wordwrapper *wrapper, z_ucs *input);
 void freetype_wordwrap_flush_output(freetype_wordwrapper *wrapper);
 void freetype_wordwrap_insert_metadata(freetype_wordwrapper *wrapper,
     void (*metadata_output)(void *ptr_parameter, uint32_t int_parameter),
-    void *ptr_parameter, uint32_t int_parameter);
+    void *ptr_parameter, uint32_t int_parameter, FT_Face new_face);
 void freetype_wordwrap_adjust_line_length(freetype_wordwrapper *wrapper,
     size_t new_line_length);
 
