@@ -70,9 +70,6 @@ struct z_screen_pixel_interface
   void (*link_interface_to_story)(struct z_story *story);
   void (*reset_interface)();
   int (*close_interface)(z_ucs *error_message);
-  void (*set_text_style)(z_style text_style);
-  void (*set_colour)(z_colour foreground, z_colour background);
-  void (*set_font)(z_font font_type);
   void (*output_interface_info)();
   int (*get_screen_width_in_pixels)();
   int (*get_screen_height_in_pixels)();
