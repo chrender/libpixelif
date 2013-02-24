@@ -3,10 +3,13 @@ AM_CPPFLAGS =
 LDADD = $(libfizmo_LIBS) $(freetype2_LIBS)
 
 localedir = $(datarootdir)/fizmo/locales
+fontdir = $(datarootdir)/fizmo/fonts
+
+AM_CFLAGS += -DFONT_DEFAULT_SEARCH_PATH=\"$(fontdir)\"
 
 noinst_LIBRARIES = libpixelif.a
 libpixelif_a_SOURCES = ../locales/libpixelif_locales.c pixel_interface.c \
-  freetype_wordwrapper.c
+  true_type_wordwrapper.c true_type_font.c true_type_factory.c
 
 if ENABLE_TRACING
 AM_CFLAGS += -DENABLE_TRACING=
