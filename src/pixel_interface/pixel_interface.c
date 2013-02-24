@@ -32,9 +32,7 @@
 
 #include <string.h>
 #include <math.h>
-
-#include <ft2build.h>
-#include FT_FREETYPE_H
+#include <stdio.h>
 
 #include "tools/i18n.h"
 #include "tools/tracelog.h"
@@ -52,7 +50,9 @@
 #include "interpreter/output.h"
 
 #include "pixel_interface.h"
-#include "freetype_wordwrapper.h"
+#include "true_type_wordwrapper.h"
+#include "true_type_factory.h"
+#include "true_type_font.h"
 #include "../screen_interface/screen_pixel_interface.h"
 #include "../locales/libpixelif_locales.h"
 
@@ -92,14 +92,15 @@ struct z_window {
   z_colour output_background_colour;
   z_style output_text_style;
 
-  freetype_wordwrapper *wordwrapper;
+  true_type_wordwrapper *wordwrapper;
 };
 
 // Z-Spec 8.8.1: The display is an array of pixels. Coordinates are usually
 // given (in units) in the form (y,x), with (1,1) in the top left.
 
 static char *screen_pixel_interface_version = LIBPIXELINTERFACE_VERSION;
-static FT_Library ftlibrary;
+//static FT_Library ftlibrary;
+static true_type_factory *font_factory;
 static int screen_height_in_pixel = -1;
 static int screen_width_in_pixel = -1;
 static int nof_active_z_windows = 0;
@@ -118,7 +119,7 @@ static int active_z_window_id = -1;
 static z_colour current_output_foreground_colour = -3;
 static z_colour current_output_background_colour = -3;
 static z_style current_output_text_style = -1;
-static freetype_wordwrapper *refresh_wordwrapper;
+static true_type_wordwrapper *refresh_wordwrapper;
 static int refresh_newline_counter;
 static bool refresh_count_mode;
 static int refresh_lines_to_skip;
@@ -126,10 +127,21 @@ static int refresh_lines_to_output;
 static int last_split_window_size = 0;
 //static bool winch_found = false;
 static bool interface_open = false;
-static FT_Face face;
-static int font_height_in_pixel = 14;
+/*
+static FT_Face regular_face;
+static FT_Face italic_face;
+static FT_Face bold_face;
+static FT_Face bold_italic_face;
+static FT_Face current_face;
+*/
+static true_type_font *regular_font;
+static true_type_font *italic_font;
+static true_type_font *bold_font;
+static true_type_font *bold_italic_font;
+static true_type_font *current_true_type_font;
+static int font_height_in_pixel = 15;
 static int line_height;
-static freetype_wordwrapper *preloaded_wordwrapper;
+static true_type_wordwrapper *preloaded_wordwrapper;
 
 // Scrolling upwards:
 // It is always assumed that there's no output to window[0] and it's
@@ -161,9 +173,16 @@ static int *current_input_display_width, *current_input_x, *current_input_y;
 
 static char last_left_margin_config_value_as_string[MAX_MARGIN_AS_STRING_LEN];
 static char last_right_margin_config_value_as_string[MAX_MARGIN_AS_STRING_LEN];
+static char *regular_font_filename = NULL;
+static char *italic_font_filename = NULL;
+static char *bold_font_filename = NULL;
+static char *bold_italic_font_filename = NULL;
+static char *font_search_path = FONT_DEFAULT_SEARCH_PATH;
 
 static char *config_option_names[] = {
-  "left-margin", "right-margin", "disable-hyphenation", "disable-color", NULL };
+  "left-margin", "right-margin", "disable-hyphenation", "disable-color",
+  "regular-font", "italic-font", "bold-font", "bold-italic-font",
+  "font-search-path", NULL };
 
 
   /*
@@ -187,6 +206,19 @@ static void break_line(int window_number) {
       z_windows[window_number]->ysize);
   if (z_windows[window_number]->ycursorpos + 2*line_height
       >= z_windows[window_number]->ysize - 1) {
+
+    // begin QUARTZ_WM_WORKAROUND
+    screen_pixel_interface->fill_area(
+        z_windows[window_number]->xpos
+        + z_windows[window_number]->xsize
+        - z_windows[window_number]->rightmargin,
+        z_windows[window_number]->ypos
+        + z_windows[window_number]->ysize - line_height,
+        z_windows[window_number]->rightmargin,
+        line_height,
+        z_windows[window_number]->output_background_colour);
+    // end ENABLE_QUARTZ_WM_WORKAROUND
+
     screen_pixel_interface->copy_area(
         z_windows[window_number]->ypos,
         z_windows[window_number]->xpos,
@@ -210,108 +242,36 @@ static void break_line(int window_number) {
 }
 
 
-static void draw_glyph(z_ucs charcode, z_ucs following_charcode,
-    int window_number) {
-  FT_GlyphSlot slot;
-  FT_Bitmap bitmap;
-  FT_Vector kerning;
-  int x,y;
-  int ft_error;
-  int screen_x, screen_y, advance, start_x;
-  int error;
-  FT_Bool use_kerning;
+static void draw_glyph(z_ucs charcode, int window_number) {
+  int x, y, advance;
 
   if (charcode == Z_UCS_NEWLINE) {
     break_line(window_number);
     return;
   }
 
-  FT_UInt glyph_index = FT_Get_Char_Index(face, charcode);
-
-  ft_error = FT_Load_Glyph(
-      face,
-      glyph_index,
-      FT_LOAD_DEFAULT);
-
-  ft_error = FT_Render_Glyph(
-      face->glyph,
-      FT_RENDER_MODE_NORMAL);
-
-  slot = face->glyph;
-
-  // FIXME: Free glyph's memory.
-  // FT_Done_FreeType
-  
-  use_kerning = FT_HAS_KERNING( face );
-
-  //advance = face->glyph->metrics.horiAdvance / 64;
-  advance = slot->advance.x / 64;
-
-  if ( (following_charcode != 0) && (use_kerning) ) {
-    error = FT_Get_Kerning(face, charcode, following_charcode,
-        FT_KERNING_DEFAULT, &kerning);
-    if (error) {
-      printf("error: %d\n", error);
-      exit(-1);
-    }
-    advance += kerning.x / 64;
-  }
-
-  /*
-  supposed to be handeled y the wrapper:
-  if (z_windows[window_number]->xcursorpos + advance
-      > z_windows[window_number]->xsize
-      - z_windows[window_number]->rightmargin) {
-    break_line(window_number);
-  }
-  */
-
-  bitmap = slot->bitmap;
-
-  /*
-  screen_x = z_windows[window_number]->xcursorpos;
-  screen_y = z_windows[window_number]->ycursorpos
-    + face->size->metrics.ascender/64
-    - face->glyph->metrics.horiBearingY/64;
-    */
-
-  start_x = z_windows[window_number]->xpos
+  x = z_windows[window_number]->xpos
     + z_windows[window_number]->leftmargin
-    + z_windows[window_number]->xcursorpos + slot->bitmap_left;
-  printf("bitmap-left: %d\n", slot->bitmap_left);
-  screen_y = z_windows[window_number]->ypos
-    + z_windows[window_number]->ycursorpos
-    + face->size->metrics.ascender/64
-    - slot->bitmap_top;
+    + z_windows[window_number]->xcursorpos;
+  y = z_windows[window_number]->ypos
+    + z_windows[window_number]->ycursorpos;
 
-  printf("drawing glyph '%c' at %d, %d.\n", charcode, start_x, screen_y);
-  TRACE_LOG("drawing glyph '%c' at %d, %d.\n", charcode, start_x, screen_y);
-  /*
-  printf("drawing glyph '%c' at %d, %d / %d, %d.\n",
-      charcode, screen_x, screen_y, face->size->metrics.ascender,
-      face->glyph->metrics.height);
-  */
-
-  for (y=0; y<bitmap.rows; y++, screen_y++) {
-    screen_x = start_x;
-    for (x=0; x<bitmap.width; x++, screen_x++) {
-      /*
-      printf("%d / %d, %d*%d\n", screen_x, screen_y,
-          bitmap.width, bitmap.rows);
-      */
-      screen_pixel_interface->draw_grayscale_pixel(
-          screen_y, screen_x, 255-bitmap.buffer[y*bitmap.width + x]);
-    }
-  }
+  advance = tt_draw_glyph(
+      current_true_type_font,
+      x,
+      y,
+      screen_pixel_interface,
+      charcode);
 
   z_windows[window_number]->xcursorpos += advance;
 }
 
 
 static void draw_glyph_string(z_ucs *z_ucs_output, int window_number) {
-  z_ucs current_char, next_char, *next_word_end;
-  z_ucs word_end_chars[] = { Z_UCS_SPACE, Z_UCS_NEWLINE, 0 };
+  //z_ucs current_char, next_char; //, *next_word_end;
+  //z_ucs word_end_chars[] = { Z_UCS_SPACE, Z_UCS_NEWLINE, 0 };
 
+  /*
   TRACE_LOG("drawing glyph string: \"");
   TRACE_LOG_Z_UCS(z_ucs_output);
   TRACE_LOG("\".\n");
@@ -331,6 +291,12 @@ static void draw_glyph_string(z_ucs *z_ucs_output, int window_number) {
   }
 
   draw_glyph(current_char, 0, window_number);
+  */
+
+  while (*z_ucs_output) {
+    draw_glyph(*z_ucs_output, window_number);
+    z_ucs_output++;
+  }
 }
 
 
@@ -375,9 +341,11 @@ static void update_output_colours(int window_number) {
         != current_output_foreground_colour)
       || (z_windows[window_number]->output_background_colour
         != current_output_background_colour)) {
+    /*
     screen_pixel_interface->set_colour(
         z_windows[window_number]->output_foreground_colour,
         z_windows[window_number]->output_background_colour);
+    */
 
     current_output_foreground_colour
       = z_windows[window_number]->output_foreground_colour;
@@ -394,7 +362,22 @@ static void update_output_text_style(int window_number) {
     current_output_text_style
       = z_windows[window_number]->output_text_style;
 
-    screen_pixel_interface->set_text_style(current_output_text_style);
+    if (current_output_text_style & Z_STYLE_BOLD) {
+      if (current_output_text_style & Z_STYLE_ITALIC) {
+        current_true_type_font = bold_italic_font;
+      }
+      else {
+        current_true_type_font = bold_font;
+      }
+    }
+    else if (current_output_text_style & Z_STYLE_ITALIC) {
+      current_true_type_font = italic_font;
+    }
+    else {
+      current_true_type_font = regular_font;
+    }
+    
+    //screen_pixel_interface->set_text_style(current_output_text_style);
   }
 }
 
@@ -412,6 +395,7 @@ void z_ucs_output_window_target(z_ucs *z_ucs_output,
     void *window_number_as_void) {
   int window_number = *((int*)window_number_as_void);
 
+  update_output_text_style(window_number);
   draw_glyph_string(z_ucs_output, window_number);
 
   /*
@@ -424,7 +408,6 @@ void z_ucs_output_window_target(z_ucs *z_ucs_output,
     return;
 
   update_output_colours(window_number);
-  update_output_text_style(window_number);
   //refresh_cursor(window_number);
 
   TRACE_LOG("output-window-target, win %d, %dx%d.\n",
@@ -916,6 +899,36 @@ static int parse_config_parameter(char *key, char *value) {
     free(value);
     return 0;
   }
+  else if (strcasecmp(key, "regular-font") == 0) {
+    if (regular_font_filename != NULL)
+      free(regular_font_filename);
+    regular_font_filename = value;
+    return 0;
+  }
+  else if (strcasecmp(key, "italic-font") == 0) {
+    if (italic_font_filename != NULL)
+      free(italic_font_filename);
+    italic_font_filename = value;
+    return 0;
+  }
+  else if (strcasecmp(key, "bold-font") == 0) {
+    if (bold_font_filename != NULL)
+      free(bold_font_filename);
+    bold_font_filename = value;
+    return 0;
+  }
+  else if (strcasecmp(key, "bold-italic-font") == 0) {
+    if (bold_italic_font_filename != NULL)
+      free(bold_italic_font_filename);
+    bold_italic_font_filename = value;
+    return 0;
+  }
+  else if (strcasecmp(key, "font-search-path") == 0) {
+    if (font_search_path != NULL)
+      free(font_search_path);
+    font_search_path = value;
+    return 0;
+  }
   else {
     return screen_pixel_interface->parse_config_parameter(key, value);
   }
@@ -948,6 +961,21 @@ static char *get_config_value(char *key)
     return color_disabled == false
       ? config_true_value
       : config_false_value;
+  }
+  else if (strcasecmp(key, "regular-font") == 0) {
+    return regular_font_filename;
+  }
+  else if (strcasecmp(key, "italic-font") == 0) {
+    return italic_font_filename;
+  }
+  else if (strcasecmp(key, "bold-font") == 0) {
+    return bold_font_filename;
+  }
+  else if (strcasecmp(key, "bold-italic-font") == 0) {
+    return bold_italic_font_filename;
+  }
+  else if (strcasecmp(key, "font-search-path") == 0) {
+    return font_search_path;
   }
   else {
     return screen_pixel_interface->get_config_value(key);
@@ -991,13 +1019,15 @@ static void z_ucs_output(z_ucs *z_ucs_output) {
 }
 
 
+
 static void link_interface_to_story(struct z_story *story) {
   int bytes_to_allocate;
   int len;
   int i;
-  int ft_error;
+  //int ft_error;
+
   /*
-  FT_Face face;
+  FT_Face current_face;
   FT_GlyphSlot slot;
   FT_Bitmap bitmap;
   int x,y;
@@ -1007,8 +1037,10 @@ static void link_interface_to_story(struct z_story *story) {
 
   TRACE_LOG("Linking screen interface to pixel interface.\n");
   screen_pixel_interface->link_interface_to_story(story);
+
   TRACE_LOG("Linking complete.\n");
 
+  /*
   if ((ft_error = FT_Init_FreeType(&ftlibrary))) {
     i18n_translate_and_exit(
         libpixelif_module_name,
@@ -1016,52 +1048,63 @@ static void link_interface_to_story(struct z_story *story) {
         -1,
         "FT_Init_FreeType");
   }
+  */
 
-  ft_error = FT_New_Face(ftlibrary,
-      "LinLibertine_DRah.ttf",
-      //"LucidaSansRegular.ttf",
-      0,
-      &face);
+  font_factory = create_true_type_factory(font_search_path);
 
-  if ( ft_error == FT_Err_Unknown_File_Format ) {
-    // ... the font file could be opened and read, but it appears
-    // ... that its font format is unsupported
-  }
-  else if ( ft_error ) {
-    // ... another ft_error code means that the font file could not
-    // ... be opened or read, or simply that it is broken...
+  if (regular_font_filename == NULL) {
+    printf("No regular font set.");
     exit(-1);
   }
 
-  /*
-  ft_error = FT_Set_Char_Size(
-      face,    // handle to face object
-      0,       // char_width in 1/64th of points
-      16*64,   // char_height in 1/64th of points
-      300,     // horizontal device resolution
-      300 );   // vertical device resolution
-  */
+  regular_font = create_true_type_font(font_factory, regular_font_filename,
+      font_height_in_pixel);
+  //load_ttf(&regular_face, regular_font_filename);
+  current_true_type_font = regular_font;
 
-  ft_error = FT_Set_Pixel_Sizes(
-      face,   /* handle to face object */
-      0,      /* pixel_width           */
-      font_height_in_pixel );   /* pixel_height          */
+  if ( (italic_font_filename == NULL)
+      && (strcmp(italic_font_filename, regular_font_filename) == 0) ) {
+    italic_font = regular_font;
+  }
+  else {
+    italic_font = create_true_type_font(font_factory, italic_font_filename,
+        font_height_in_pixel);
+  }
 
+  if ( (bold_font_filename == NULL)
+      && (strcmp(bold_font_filename, regular_font_filename) == 0) ) {
+    bold_font = regular_font;
+  }
+  else {
+    bold_font = create_true_type_font(font_factory, bold_font_filename,
+        font_height_in_pixel);
+  }
+
+  if ( (bold_italic_font_filename == NULL)
+      && (strcmp(bold_italic_font_filename, regular_font_filename) == 0) ) {
+    bold_italic_font = regular_font;
+  }
+  else {
+    bold_italic_font
+      = create_true_type_font(font_factory, bold_italic_font_filename,
+          font_height_in_pixel);
+  }
+  
   line_height = font_height_in_pixel + 4;
 
   /*
-  FT_UInt glyph_index = FT_Get_Char_Index( face, 'a');
+  FT_UInt glyph_index = FT_Get_Char_Index( current_face, 'a');
 
   ft_error = FT_Load_Glyph(
-      face,
+      current_face,
       glyph_index,
       FT_LOAD_DEFAULT);
 
   ft_error = FT_Render_Glyph(
-      face->glyph,
+      current_face->glyph,
       FT_RENDER_MODE_NORMAL);
 
-  slot = face->glyph;
+  slot = current_face->glyph;
 
   bitmap = slot->bitmap;
 
@@ -1181,8 +1224,8 @@ static void link_interface_to_story(struct z_story *story) {
     z_windows[i]->wrapping = (i == 0) ? true : false;
     z_windows[i]->buffering = ((ver == 6) || (i == 0)) ? true : false;
 
-    z_windows[i]->wordwrapper = create_freetype_wordwrapper(
-        face,
+    z_windows[i]->wordwrapper = create_true_type_wordwrapper(
+        regular_font,
         z_windows[i]->xsize - z_windows[i]->leftmargin
         - z_windows[i]->rightmargin,
         &z_ucs_output_window_target,
@@ -1192,8 +1235,8 @@ static void link_interface_to_story(struct z_story *story) {
 
   active_z_window_id = 0;
 
-  refresh_wordwrapper = create_freetype_wordwrapper(
-      face,
+  refresh_wordwrapper = create_true_type_wordwrapper(
+      regular_font,
       z_windows[0]->xsize-z_windows[0]->leftmargin-z_windows[0]->rightmargin,
       &z_ucs_output_refresh_destination,
       NULL,
@@ -1201,9 +1244,11 @@ static void link_interface_to_story(struct z_story *story) {
 
   // First, set default colors for the screen, then clear it to correctly
   // initialize everything with the desired colors.
+  /*
   if (using_colors == true)
     screen_pixel_interface->set_colour(
         default_foreground_colour, default_background_colour);
+    */
   //screen_pixel_interface->fill_area(
   //    1, 1, screen_width_in_pixel, screen_height_in_pixel);
 
@@ -1293,7 +1338,7 @@ static int pixel_close_interface(z_ucs *error_message) {
 
   screen_pixel_interface->close_interface(error_message);
 
-  FT_Done_FreeType(ftlibrary);
+  //FT_Done_FreeType(ftlibrary);
 
   interface_open = false;
   return 0;
@@ -1639,6 +1684,8 @@ static void refresh_input_line() {
         //Z_COLOUR_BLUE); //z_windows[0]->output_background_colour);
   }
 
+  update_output_text_style(0);
+
   draw_glyph_string(current_input_buffer, 0);
   draw_cursor(z_windows[0]->xcursorpos +
       z_windows[0]->xpos + z_windows[0]->leftmargin,
@@ -1651,7 +1698,6 @@ static void refresh_input_line() {
 
   // Set output style to current window 0 style.
   update_output_colours(0);
-  update_output_text_style(0);
 
   if (*current_input_size - *current_input_scroll_x
       >= *current_input_display_width + 1)
@@ -2306,8 +2352,8 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
       TRACE_LOG("Trying to find paragraph to fill %d lines.\n",
           z_windows[0]->ysize);
 
-      preloaded_wordwrapper = create_freetype_wordwrapper(
-          face,
+      preloaded_wordwrapper = create_true_type_wordwrapper(
+          regular_font,
           z_windows[active_z_window_id]->xsize
           - z_windows[active_z_window_id]->leftmargin
           - z_windows[active_z_window_id]->rightmargin,
@@ -2323,8 +2369,9 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
         printf("err\n");
       }
       output_repeat_paragraphs(preload_history, 1, false, false);
-      printf("wrapper-xpos: %ld\n", preloaded_wordwrapper->current_pixel_pos);
-      input_x = preloaded_wordwrapper->current_pixel_pos
+      //printf("wrapper-xpos: %ld\n", preloaded_wordwrapper->current_pixel_pos);
+      //input_x = preloaded_wordwrapper->current_pixel_pos
+      input_x = 0
         + z_windows[active_z_window_id]->xpos
         + z_windows[active_z_window_id]->leftmargin;
       input_y
