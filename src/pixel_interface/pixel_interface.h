@@ -39,6 +39,7 @@
 
 #define MAX_MARGIN_SIZE 100
 #define MAX_MARGIN_AS_STRING_LEN 4
+#define MAX_VALUE_AS_STRING_LEN 4
 
 void fizmo_register_screen_pixel_interface(struct z_screen_pixel_interface
     *screen_pixel_interface);

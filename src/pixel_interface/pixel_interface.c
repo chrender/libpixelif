@@ -139,7 +139,6 @@ static true_type_font *italic_font;
 static true_type_font *bold_font;
 static true_type_font *bold_italic_font;
 static true_type_font *current_true_type_font;
-static int font_height_in_pixel = 15;
 static int line_height;
 static true_type_wordwrapper *preloaded_wordwrapper;
 
@@ -178,11 +177,13 @@ static char *italic_font_filename = NULL;
 static char *bold_font_filename = NULL;
 static char *bold_italic_font_filename = NULL;
 static char *font_search_path = FONT_DEFAULT_SEARCH_PATH;
+static int font_height_in_pixel = 15;
+static char last_font_size_config_value_as_string[MAX_VALUE_AS_STRING_LEN];
 
 static char *config_option_names[] = {
   "left-margin", "right-margin", "disable-hyphenation", "disable-color",
   "regular-font", "italic-font", "bold-font", "bold-italic-font",
-  "font-search-path", NULL };
+  "font-search-path", "font-size", NULL };
 
 
   /*
@@ -929,6 +930,16 @@ static int parse_config_parameter(char *key, char *value) {
     font_search_path = value;
     return 0;
   }
+  else if (strcasecmp(key, "font-size") == 0) {
+    if ( (value == NULL) || (strlen(value) == 0) )
+      return -1;
+    long_value = strtol(value, &endptr, 10);
+    free(value);
+    if (*endptr != 0)
+      return -1;
+    font_height_in_pixel = long_value;
+    return 0;
+  }
   else {
     return screen_pixel_interface->parse_config_parameter(key, value);
   }
@@ -976,6 +987,11 @@ static char *get_config_value(char *key)
   }
   else if (strcasecmp(key, "font-search-path") == 0) {
     return font_search_path;
+  }
+  else if (strcasecmp(key, "font-size") == 0) {
+    snprintf(last_font_size_config_value_as_string, MAX_VALUE_AS_STRING_LEN,
+        "%d", font_height_in_pixel);
+    return last_font_size_config_value_as_string;
   }
   else {
     return screen_pixel_interface->get_config_value(key);
