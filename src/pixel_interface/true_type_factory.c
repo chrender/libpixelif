@@ -148,7 +148,7 @@ true_type_font *create_true_type_font(true_type_factory *factory,
       0,
       pixel_size);
 
-  result->has_kerning = FT_HAS_KERNING(result->face);
+  //result->has_kerning = FT_HAS_KERNING(result->face);
 
   return result;
 }

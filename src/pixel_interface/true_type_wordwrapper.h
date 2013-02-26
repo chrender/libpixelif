@@ -47,7 +47,6 @@ struct freetype_wordwrap_metadata {
 
 typedef struct {
   true_type_font *current_font;
-  int space_advance_distance;
   int line_length; // in pixels
   bool enable_hyphenation;
   struct freetype_wordwrap_metadata *metadata;
@@ -60,15 +59,16 @@ typedef struct {
   long current_buffer_index;
   long last_word_end_index; // last word end buffer index
   long last_word_end_advance_position; // right position of last word in line
-  long words_last_advance_position; // last position in current word
+  long current_advance_position;
 } true_type_wordwrapper;
 
 
-true_type_wordwrapper *create_true_type_wordwrapper(true_type_font *current_font,
-    int line_length,
+true_type_wordwrapper *create_true_type_wordwrapper(
+    true_type_font *current_font, int line_length,
     void (*wrapped_text_output_destination)(z_ucs *output, void *parameter),
     void *destination_parameter, bool hyphenation_enabled);
 void destroy_freetype_wrapper(true_type_wordwrapper * wrapper);
+int get_current_pixel_position(true_type_wordwrapper *wrapper);
 void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input);
 void freetype_wordwrap_flush_output(true_type_wordwrapper *wrapper);
 void freetype_wordwrap_insert_metadata(true_type_wordwrapper *wrapper,

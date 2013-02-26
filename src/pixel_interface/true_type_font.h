@@ -42,14 +42,14 @@
 
 struct true_type_font_struct {
   FT_Face face;
-  bool has_kerning;
+  //bool has_kerning;
   z_ucs last_char; // for kerning
 };
 
 typedef struct true_type_font_struct true_type_font;
 
-int tt_get_glyph_get_distance_to_rightmost_pixel(true_type_font *font,
-    z_ucs charcode);
+//int tt_get_glyph_get_distance_to_rightmost_pixel(true_type_font *font,
+//    z_ucs charcode);
 int tt_get_glyph_advance(true_type_font *font, z_ucs current_char,
     z_ucs last_char);
 int tt_draw_glyph(true_type_font *font, int x, int y,

@@ -63,7 +63,6 @@
 
 static void set_font(true_type_wordwrapper *wrapper, true_type_font *new_font) {
   wrapper->current_font = new_font;
-  wrapper->space_advance_distance = tt_get_glyph_advance(new_font, ' ', 0);
 }
 
 
@@ -79,7 +78,7 @@ true_type_wordwrapper *create_true_type_wordwrapper(true_type_font *font,
   result->current_buffer_index = 0;
   result->last_word_end_index = -1;
   result->last_word_end_advance_position = 0;
-  result->words_last_advance_position = 0;
+  result->current_advance_position = 0;
   result->wrapped_text_output_destination = wrapped_text_output_destination;
   result->destination_parameter = destination_parameter;
   result->enable_hyphenation = hyphenation_enabled;
@@ -125,10 +124,19 @@ inline static int ensure_additional_buffer_capacity(
 }
 
 
+int get_current_pixel_position(true_type_wordwrapper *wrapper) {
+  return wrapper->current_advance_position;
+}
+
+
 void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
   z_ucs buf;
   size_t chars_sent;
   z_ucs *ptr;
+  int metadata_index = 0;
+  int output_metadata_index, output_index;
+  struct freetype_wordwrap_metadata *metadata_entry;
+  int i;
 
   TRACE_LOG("flush on: %c %d \n",
       (char)wrapper->input_buffer[flush_index],
@@ -139,6 +147,47 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
   }
   ensure_additional_buffer_capacity(wrapper, 1);
   flush_index++;
+
+  output_index = 0;
+  while (metadata_index < wrapper->metadata_index) {
+
+    output_metadata_index =
+      wrapper->metadata[metadata_index].output_index;
+
+    TRACE_LOG("mdoutput: mdindex: %d, flushindex: %d\n",
+        output_metadata_index, flush_index);
+
+    if (output_metadata_index > flush_index) {
+     break;
+    }
+
+    if (output_index < output_metadata_index) {
+      buf = wrapper->input_buffer[output_metadata_index];
+      wrapper->input_buffer[output_metadata_index] = 0;
+      wrapper->wrapped_text_output_destination(
+          wrapper->input_buffer + output_index,
+          wrapper->destination_parameter);
+      wrapper->input_buffer[output_metadata_index] = buf;
+      output_index = output_metadata_index;
+    }
+
+    while ( (metadata_index < wrapper->metadata_index)
+        && (wrapper->metadata[metadata_index].output_index
+          == output_metadata_index) ) {
+
+      metadata_entry = &wrapper->metadata[metadata_index];
+
+      TRACE_LOG("Output metadata prm %d at %ld.\n",
+          metadata_entry->int_parameter,
+          output_metadata_index);
+
+      metadata_entry->metadata_output_function(
+          metadata_entry->ptr_parameter,
+          metadata_entry->int_parameter);
+
+      metadata_index++;
+    }
+  }
 
   buf = wrapper->input_buffer[flush_index];
   TRACE_LOG("0 to %p\n", wrapper->input_buffer + flush_index);
@@ -154,7 +203,7 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
   TRACE_LOG_Z_UCS(wrapper->input_buffer);
   TRACE_LOG("\"\n");
   wrapper->wrapped_text_output_destination(
-      wrapper->input_buffer,
+      wrapper->input_buffer + output_index,
       wrapper->destination_parameter);
   wrapper->input_buffer[flush_index] = buf;
 
@@ -168,11 +217,13 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
       wrapper->input_buffer,
       wrapper->input_buffer + flush_index,
       chars_sent * sizeof(z_ucs));
+  for (i=0; i<wrapper->metadata_index; i++)
+    wrapper->metadata[i].output_index -= chars_sent;
 
   wrapper->current_buffer_index -= chars_sent;
-  wrapper->last_word_end_index = -1;
-  wrapper->last_word_end_advance_position = -1;
-  //wrapper->words_last_advance_position = 0; // no need to adjust
+  //wrapper->last_word_end_index = -1;
+  //wrapper->last_word_end_advance_position = -1;
+  //wrapper->current_advance_position = 0; // no need to adjust
 }
 
 
@@ -192,19 +243,11 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
   
   // To minimize calculations, we keeping track of the last complete word's
   // rightmost char in last_word_end_index and the "word's last advance
-  // position" in words_last_advance_position.
+  // position" in last_word_end_advance_position.
 
   // An "advance position" sums up all the "horiAdvance" distances for all
   // glyphs in the current word.
   
-  // For the word in progress, we're not(!) keeping track of the rightmost's
-  // char's advance position, since we cannot know if the following char
-  // will end the current word -- in that case we would need the position
-  // of the rightmost pixel instead of the advance position. That means
-  // that "words_last_advance_position" truly not contain the current word's
-  // advance position, the advance position without(!) the last char in the
-  // current word.
-
   // last_word_end_advance_position contains the advance position of
   // the last complete word/char which still fits into the current line.
   // This is updated every time we hit a space (so we can easily find the last
@@ -223,60 +266,33 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
 
     ensure_additional_buffer_capacity(wrapper, 1);
     wrapper->input_buffer[wrapper->current_buffer_index] = current_char;
-    TRACE_LOG("buffer-add: %c / %ld / %p / wlap:%ld / lweap:%ld \n",
+
+    TRACE_LOG("buffer-add: %c / %ld / %p / cap:%ld / lweap:%ld \n",
         (char)current_char,
         wrapper->current_buffer_index,
         wrapper->input_buffer + wrapper->current_buffer_index,
-        wrapper->words_last_advance_position,
+        wrapper->current_advance_position,
         wrapper->last_word_end_advance_position);
-    printf("buffer-add: '%c' / %ld / wlap:%ld / lweap:%ld \n",
-        (char)current_char,
-        wrapper->current_buffer_index,
-        wrapper->words_last_advance_position,
-        wrapper->last_word_end_advance_position);
+
     wrapper->current_buffer_index++;
 
-    if ((current_char != Z_UCS_SPACE) && (current_char != Z_UCS_NEWLINE)) {
-      // In case we've hit a word boundary, we're not adding the advance
-      // position to words_last_advance_position in order to be able to
-      // calcualte the actual width a bit easier below.
-      wrapper->words_last_advance_position
+    if (current_char != Z_UCS_NEWLINE) {
+      wrapper->current_advance_position
         += tt_get_glyph_advance(wrapper->current_font, current_char, last_char);
     }
 
     // In case we're hitting a space or newline we have to evaluate whether
     // we're now at a position behind the right margin.
     if ((current_char == Z_UCS_SPACE) || (current_char == Z_UCS_NEWLINE)) {
-      // We'll check whether things fit in to the current line. In case
-      // last_char is set, we know we're processing a word and that
-      // we need to add the last_char's left bearing and width to
-      // "words_last_advance_position" in order to get the word's final
-      // pixel width which can be used to find out the true current position.
-      TRACE_LOG("lwei: %ld / lweap: %ld / sad: %d / ll: %d\n",
+      // We'll check whether things fit in to the current line.
+      TRACE_LOG("lwei: %ld / lweap: %ld / ll: %d\n",
           wrapper->last_word_end_index,
           wrapper->last_word_end_advance_position,
-          wrapper->space_advance_distance,
           wrapper->line_length);
 
-      /*
-      if ( (wrapper->last_word_end_index >= 0
-            ? wrapper->last_word_end_advance_position
-            + wrapper->space_advance_distance
-            : 0)
-          + wrapper->words_last_advance_position
-          + tt_get_glyph_get_distance_to_rightmost_pixel(
-            wrapper->current_font, last_char)
-          > wrapper->line_length ) {
-        */
-      if ( (wrapper->last_word_end_index >= 0
-            ? wrapper->last_word_end_advance_position
-            + wrapper->space_advance_distance
-            : 0)
-          + wrapper->words_last_advance_position
-          > wrapper->line_length ) {
-        // In case the sum of last word's advance position, a space's advance
-        // distance and the last word's width exceed the right margin, we have
-        // to break the line before the last word.
+      if (wrapper->current_advance_position > wrapper->line_length) {
+        // In case we exceed the right margin, we have to break the line
+        // before the last word.
 
         if (wrapper->last_word_end_index < 0) {
           TRACE_LOG("break at %ld, 1\n", wrapper->current_buffer_index);
@@ -287,20 +303,21 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
           wrapper->input_buffer[flush_index] = Z_UCS_NEWLINE;
           flush_line(wrapper, flush_index);
           wrapper->input_buffer[flush_index] = buf_1;
+          wrapper->current_advance_position = 0;
         }
         else {
-          TRACE_LOG("break at %ld, 2\n", wrapper->last_word_end_index+1);
-          flush_index = wrapper->last_word_end_index;
           // Otherwise, we simply break after the last word.
+          TRACE_LOG("break at %ld, 2\n", wrapper->last_word_end_index + 1);
+          flush_index = wrapper->last_word_end_index;
 
           wrapper->input_buffer[flush_index] = Z_UCS_NEWLINE;
           flush_line(wrapper, flush_index);
 
-          wrapper->last_word_end_advance_position
-            = wrapper->words_last_advance_position;
+          wrapper->current_advance_position
+            -= wrapper->last_word_end_advance_position;
 
-          wrapper->words_last_advance_position
-            = 0;
+          wrapper->last_word_end_advance_position
+            = wrapper->current_advance_position;
 
           wrapper->last_word_end_index
             = wrapper->current_buffer_index;
@@ -313,31 +330,21 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
             wrapper,
             wrapper->current_buffer_index - 1);
 
-        wrapper->last_word_end_advance_position
-          = 0;
-
-        wrapper->words_last_advance_position
-          = 0;
-
-        wrapper->last_word_end_index
-          = -1;
+        wrapper->last_word_end_advance_position = 0;
+        wrapper->current_advance_position = 0;
+        wrapper->last_word_end_index = -1;
       }
       else {
         // If we're not past the right margin and the current char is not
         // a newline, we've encountered a space and a word end.
         if (last_char != Z_UCS_SPACE) {
-          printf("lweap-at-space: %ld\n",
+          TRACE_LOG("lweap-at-space: %ld\n",
               wrapper->last_word_end_advance_position);
           wrapper->last_word_end_advance_position
-            += wrapper->space_advance_distance
-            +  wrapper->words_last_advance_position;
-
+            = wrapper->current_advance_position;
           wrapper->last_word_end_index
             = wrapper->current_buffer_index - 1;
         }
-
-        wrapper->words_last_advance_position
-          = 0;
       }
     }
 

@@ -37,6 +37,7 @@
 #include "tools/unused.h"
 
 
+/*
 int tt_get_glyph_get_distance_to_rightmost_pixel(true_type_font *font,
     z_ucs charcode) {
   FT_UInt glyph_index = FT_Get_Char_Index(font->face, charcode);
@@ -48,6 +49,7 @@ int tt_get_glyph_get_distance_to_rightmost_pixel(true_type_font *font,
     font->face->glyph->metrics.horiBearingX / 64 +
     font->face->glyph->metrics.width / 64;
 }
+*/
 
 
 int tt_get_glyph_advance(true_type_font *font, z_ucs current_char,
