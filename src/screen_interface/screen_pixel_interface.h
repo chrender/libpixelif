@@ -62,8 +62,6 @@ struct z_screen_pixel_interface
 
   char* (*get_interface_name)();
   bool (*is_colour_available)();
-  bool (*is_bold_face_available)();
-  bool (*is_italic_available)();
   int (*parse_config_parameter)(char *key, char *value);
   char* (*get_config_value)(char *key);
   char** (*get_config_option_names)();
