@@ -29,6 +29,11 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/*
+ * ToDo: In case buffering is activated, current_wrapper_style and
+ *       current_wrapper_font have to be set.
+ *
+ */
 
 #include <string.h>
 #include <math.h>
@@ -91,8 +96,13 @@ struct z_window {
   z_colour output_foreground_colour;
   z_colour output_background_colour;
   z_style output_text_style;
+  z_style output_font;
+  true_type_font *output_true_type_font;
+  bool fixedfont_forced_by_flags2;
 
   true_type_wordwrapper *wordwrapper;
+  z_style current_wrapper_style;
+  z_font current_wrapper_font;
 };
 
 // Z-Spec 8.8.1: The display is an array of pixels. Coordinates are usually
@@ -116,9 +126,6 @@ static z_ucs *libpixelif_score_string;
 static z_ucs *libpixelif_turns_string;
 static int libpixelif_right_status_min_size;
 static int active_z_window_id = -1;
-static z_colour current_output_foreground_colour = -3;
-static z_colour current_output_background_colour = -3;
-static z_style current_output_text_style = -1;
 static true_type_wordwrapper *refresh_wordwrapper;
 static int refresh_newline_counter;
 static bool refresh_count_mode;
@@ -134,11 +141,17 @@ static FT_Face bold_face;
 static FT_Face bold_italic_face;
 static FT_Face current_face;
 */
+static bool italic_font_available;
+static bool bold_font_available;
+static bool fixed_font_available;
 static true_type_font *regular_font;
 static true_type_font *italic_font;
 static true_type_font *bold_font;
 static true_type_font *bold_italic_font;
-static true_type_font *current_true_type_font;
+static true_type_font *fixed_regular_font;
+static true_type_font *fixed_italic_font;
+static true_type_font *fixed_bold_font;
+static true_type_font *fixed_bold_italic_font;
 static int line_height;
 static true_type_wordwrapper *preloaded_wordwrapper;
 
@@ -172,10 +185,14 @@ static int *current_input_display_width, *current_input_x, *current_input_y;
 
 static char last_left_margin_config_value_as_string[MAX_MARGIN_AS_STRING_LEN];
 static char last_right_margin_config_value_as_string[MAX_MARGIN_AS_STRING_LEN];
-static char *regular_font_filename = "SourceSansPro-Regular.ttf";
-static char *italic_font_filename = "SourceSansPro-It.ttf";
-static char *bold_font_filename = "SourceSansPro-Bold.ttf";
-static char *bold_italic_font_filename = "SourceSansPro-BoldIt.ttf";
+static char *regular_font_filename = NULL;
+static char *italic_font_filename = NULL;
+static char *bold_font_filename = NULL;
+static char *bold_italic_font_filename = NULL;
+static char *fixed_regular_font_filename = NULL;
+static char *fixed_italic_font_filename = NULL;
+static char *fixed_bold_font_filename = NULL;
+static char *fixed_bold_italic_font_filename = NULL;
 static char *font_search_path = FONT_DEFAULT_SEARCH_PATH;
 static int font_height_in_pixel = 14;
 static char last_font_size_config_value_as_string[MAX_VALUE_AS_STRING_LEN];
@@ -183,6 +200,8 @@ static char last_font_size_config_value_as_string[MAX_VALUE_AS_STRING_LEN];
 static char *config_option_names[] = {
   "left-margin", "right-margin", "disable-hyphenation", "disable-color",
   "regular-font", "italic-font", "bold-font", "bold-italic-font",
+  "fixed-regular-font", "fixed-italic-font", "fixed-bold-font",
+  "fixed-bold-italic-font",
   "font-search-path", "font-size", NULL };
 
 
@@ -318,6 +337,58 @@ static void wordwrap_output_colour(void *window_number, uint32_t color_data) {
 }
 
 
+static true_type_font *evaluate_font(z_style text_style, z_font font,
+    bool force_fixed_pitch) {
+  true_type_font *result;
+
+  if ( (font == Z_FONT_COURIER_FIXED_PITCH)
+      || (force_fixed_pitch == true)
+      || (text_style & Z_STYLE_FIXED_PITCH) ) {
+    if (text_style & Z_STYLE_BOLD) {
+      if (text_style & Z_STYLE_ITALIC) {
+        result = fixed_bold_italic_font;
+      }
+      else {
+        result = fixed_bold_font;
+      }
+    }
+    else if (text_style & Z_STYLE_ITALIC) {
+      result = fixed_italic_font;
+    }
+    else {
+      result = fixed_regular_font;
+    }
+  }
+  else {
+    if (text_style & Z_STYLE_BOLD) {
+      if (text_style & Z_STYLE_ITALIC) {
+        result = bold_italic_font;
+      }
+      else {
+        result = bold_font;
+      }
+    }
+    else if (text_style & Z_STYLE_ITALIC) {
+      result = italic_font;
+    }
+    else {
+      result = regular_font;
+    }
+  }
+
+  return result;
+}
+
+
+static void update_window_true_type_font(int window_id,
+    bool force_fixed_pitch) {
+  z_windows[window_id]->output_true_type_font = evaluate_font(
+      z_windows[window_id]->output_text_style,
+      z_windows[window_id]->output_font,
+      force_fixed_pitch);
+}
+
+
 static void wordwrap_output_style(void *window_number, uint32_t style_data) {
   int window_id = *((int*)window_number);
 
@@ -328,6 +399,18 @@ static void wordwrap_output_style(void *window_number, uint32_t style_data) {
     z_windows[window_id]->output_text_style = Z_STYLE_ROMAN;
   else
     z_windows[window_id]->output_text_style |= style_data;
+  update_window_true_type_font(window_id, false);
+}
+
+
+static void wordwrap_output_font(void *window_number, uint32_t font_data) {
+  int window_id = *((int*)window_number);
+
+  TRACE_LOG("wordwrap-font:%d.\n", font_data);
+  TRACE_LOG("window: %d.\n", window_id);
+
+  z_windows[window_id]->output_font = font_data;
+  update_window_true_type_font(window_id, false);
 }
 
 
@@ -336,58 +419,6 @@ static void switch_to_window(int window_id) {
 
   active_z_window_id = window_id;
   //refresh_cursor(active_z_window_id);
-}
-
-
-static void update_output_colours(int window_number) {
-  if (using_colors == false)
-    return;
-
-  if ( (z_windows[window_number]->output_foreground_colour
-        != current_output_foreground_colour)
-      || (z_windows[window_number]->output_background_colour
-        != current_output_background_colour)) {
-    /*
-    screen_pixel_interface->set_colour(
-        z_windows[window_number]->output_foreground_colour,
-        z_windows[window_number]->output_background_colour);
-    */
-
-    current_output_foreground_colour
-      = z_windows[window_number]->output_foreground_colour;
-
-    current_output_background_colour
-      = z_windows[window_number]->output_background_colour;
-  }
-}
-
-
-static void update_output_text_style(int window_number) {
-  if (z_windows[window_number]->output_text_style
-      != current_output_text_style) {
-
-    TRACE_LOG("output style has changed.\n");
-
-    current_output_text_style
-      = z_windows[window_number]->output_text_style;
-
-    if (current_output_text_style & Z_STYLE_BOLD) {
-      if (current_output_text_style & Z_STYLE_ITALIC) {
-        current_true_type_font = bold_italic_font;
-      }
-      else {
-        current_true_type_font = bold_font;
-      }
-    }
-    else if (current_output_text_style & Z_STYLE_ITALIC) {
-      current_true_type_font = italic_font;
-    }
-    else {
-      current_true_type_font = regular_font;
-    }
-    
-    //screen_pixel_interface->set_text_style(current_output_text_style);
-  }
 }
 
 
@@ -404,11 +435,13 @@ void z_ucs_output_window_target(z_ucs *z_ucs_output,
     void *window_number_as_void) {
   int window_number = *((int*)window_number_as_void);
 
-  update_output_text_style(window_number);
   TRACE_LOG("drawing glyph string: \"");
   TRACE_LOG_Z_UCS(z_ucs_output);
-  TRACE_LOG("\".");
-  draw_glyph_string(z_ucs_output, window_number, current_true_type_font);
+  TRACE_LOG("\".\n");
+  draw_glyph_string(
+      z_ucs_output,
+      window_number,
+      z_windows[window_number]->output_true_type_font);
 
   /*
   z_ucs input, event_type;
@@ -648,9 +681,6 @@ static void z_ucs_output_refresh_destination(z_ucs *z_ucs_output,
   z_ucs *ptr = z_ucs_output;
 #endif // ENABLE_TRACING
 
-  update_output_colours(0);
-  update_output_text_style(0);
-
   TRACE_LOG("Output to refresh dest: \"");
   TRACE_LOG_Z_UCS(z_ucs_output);
   TRACE_LOG("\".\n");
@@ -705,8 +735,6 @@ static void z_ucs_output_refresh_destination(z_ucs *z_ucs_output,
     // regular output.
     if ( (refresh_lines_to_skip == 0) && (refresh_lines_to_output > 0) ) {
       TRACE_LOG("active window id: %d.\n", active_z_window_id);
-      update_output_colours(0);
-      update_output_text_style(0);
 
       output_end = z_ucs_output;
 
@@ -760,7 +788,7 @@ static bool is_split_screen_available() {
 
 
 static bool is_variable_pitch_font_default() {
-  return false;
+  return true;
 }
 
 
@@ -775,17 +803,17 @@ static bool is_picture_displaying_available() {
 
 
 static bool is_bold_face_available() {
-  return screen_pixel_interface->is_bold_face_available();
+  return bold_font_available;
 }
 
 
 static bool is_italic_available() {
-  return screen_pixel_interface->is_italic_available();
+  return italic_font_available;
 }
 
 
 static bool is_fixed_space_font_available() {
-  return true;
+  return fixed_font_available;
 }
 
 
@@ -935,6 +963,30 @@ static int parse_config_parameter(char *key, char *value) {
     bold_italic_font_filename = value;
     return 0;
   }
+  else if (strcasecmp(key, "fixed-regular-font") == 0) {
+    if (fixed_regular_font_filename != NULL)
+      free(fixed_regular_font_filename);
+    fixed_regular_font_filename = value;
+    return 0;
+  }
+  else if (strcasecmp(key, "fixed-italic-font") == 0) {
+    if (fixed_italic_font_filename != NULL)
+      free(fixed_italic_font_filename);
+    fixed_italic_font_filename = value;
+    return 0;
+  }
+  else if (strcasecmp(key, "fixed-bold-font") == 0) {
+    if (fixed_bold_font_filename != NULL)
+      free(fixed_bold_font_filename);
+    fixed_bold_font_filename = value;
+    return 0;
+  }
+  else if (strcasecmp(key, "fixed-bold-italic-font") == 0) {
+    if (fixed_bold_italic_font_filename != NULL)
+      free(fixed_bold_italic_font_filename);
+    fixed_bold_italic_font_filename = value;
+    return 0;
+  }
   else if (strcasecmp(key, "font-search-path") == 0) {
     if (font_search_path != NULL)
       free(font_search_path);
@@ -996,6 +1048,18 @@ static char *get_config_value(char *key)
   else if (strcasecmp(key, "bold-italic-font") == 0) {
     return bold_italic_font_filename;
   }
+  else if (strcasecmp(key, "fixed-regular-font") == 0) {
+    return fixed_regular_font_filename;
+  }
+  else if (strcasecmp(key, "fixed-italic-font") == 0) {
+    return fixed_italic_font_filename;
+  }
+  else if (strcasecmp(key, "fixed-bold-font") == 0) {
+    return fixed_bold_font_filename;
+  }
+  else if (strcasecmp(key, "fixed-bold-italic-font") == 0) {
+    return fixed_bold_italic_font_filename;
+  }
   else if (strcasecmp(key, "font-search-path") == 0) {
     return font_search_path;
   }
@@ -1016,30 +1080,92 @@ static char **get_config_option_names() {
 
 
 static void z_ucs_output(z_ucs *z_ucs_output) {
+
   TRACE_LOG("Output: \"");
   TRACE_LOG_Z_UCS(z_ucs_output);
   TRACE_LOG("\" to window %d, buffering: %d.\n",
       active_z_window_id,
       active_z_window_id != -1 ? z_windows[active_z_window_id]->buffering : -1);
 
+  if (((z_windows[active_z_window_id]->fixedfont_forced_by_flags2 == false)
+        && (z_mem[0x11] & 2))
+      || ((z_windows[active_z_window_id]->fixedfont_forced_by_flags2 == true)
+        && ((z_mem[0x11] & 2)) == 0)) {
+    // "Game sets to force printing in fixed-pitch font" has changed.
+    if ((z_mem[0x11] & 2)) {
+      // Fixed-width turned on.
+      z_windows[active_z_window_id]->fixedfont_forced_by_flags2 = true;
+      TRACE_LOG("fixedfont_forced_by_flags2 turned on.\n");
+
+      if (bool_equal(z_windows[active_z_window_id]->buffering, false)) {
+        update_window_true_type_font(active_z_window_id, true);
+      }
+      else {
+        if ((z_windows[active_z_window_id]->current_wrapper_style
+              & Z_STYLE_FIXED_PITCH) == 0) {
+          freetype_wordwrap_insert_metadata(
+              z_windows[active_z_window_id]->wordwrapper,
+              &wordwrap_output_style,
+              (void*)(&z_windows[active_z_window_id]->window_number),
+              (uint32_t)z_windows[active_z_window_id]->current_wrapper_style
+              | Z_STYLE_FIXED_PITCH,
+              evaluate_font(
+                z_windows[active_z_window_id]->current_wrapper_style,
+                z_windows[active_z_window_id]->current_wrapper_font,
+                true));
+        }
+      }
+    }
+    else {
+      // Fixed width turned off.
+      z_windows[active_z_window_id]->fixedfont_forced_by_flags2 = false;
+      TRACE_LOG("fixedfont_forced_by_flags2 turned off.\n");
+
+      if (bool_equal(z_windows[active_z_window_id]->buffering, false)) {
+        update_window_true_type_font(active_z_window_id, false);
+      }
+      else {
+        if ((z_windows[active_z_window_id]->current_wrapper_style
+              & Z_STYLE_FIXED_PITCH) == 0) {
+          freetype_wordwrap_insert_metadata(
+              z_windows[active_z_window_id]->wordwrapper,
+              &wordwrap_output_style,
+              (void*)(&z_windows[active_z_window_id]->window_number),
+              (uint32_t)z_windows[active_z_window_id]->current_wrapper_style,
+              evaluate_font(
+                z_windows[active_z_window_id]->current_wrapper_style,
+                z_windows[active_z_window_id]->current_wrapper_font,
+                false));
+        }
+      }
+    }
+  }
+
+  /*
   if (active_z_window_id == -1) {
-    printf("1\n");
-    draw_glyph_string(z_ucs_output, active_z_window_id, current_true_type_font);
+    draw_glyph_string(
+        z_ucs_output,
+        active_z_window_id,
+        z_windows[active_z_window_id]->output_true_type_font);
   }
   else {
+    */
     if (bool_equal(z_windows[active_z_window_id]->buffering, false)) {
-      update_output_colours(active_z_window_id);
-      update_output_text_style(active_z_window_id);
-
+      /*
       z_ucs_output_window_target(
           z_ucs_output,
           (void*)(&z_windows[active_z_window_id]->window_number));
+      */
+      draw_glyph_string(
+          z_ucs_output,
+          active_z_window_id,
+          z_windows[active_z_window_id]->output_true_type_font);
     }
     else {
       freetype_wrap_z_ucs(
         z_windows[active_z_window_id]->wordwrapper, z_ucs_output);
     }
-  }
+  //}
   TRACE_LOG("z_ucs_output finished.\n");
 }
 
@@ -1078,35 +1204,45 @@ static void link_interface_to_story(struct z_story *story) {
   font_factory = create_true_type_factory(font_search_path);
 
   if (regular_font_filename == NULL) {
-    printf("No regular font set.");
-    exit(-1);
+    set_configuration_value("regular-font", "SourceSansPro-Regular.ttf");
+    set_configuration_value("italic-font", "SourceSansPro-It.ttf");
+    set_configuration_value("bold-font", "SourceSansPro-Bold.ttf");
+    set_configuration_value("bold-italic-font", "SourceSansPro-BoldIt.ttf");
+    /*
+    set_configuration_value("fixed-regular-font", "DroidSansMono.ttf");
+    set_configuration_value("fixed-italic-font", "DroidSansMono.ttf");
+    set_configuration_value("fixed-bold-font", "DroidSansMono.ttf");
+    set_configuration_value("fixed-italic-bold-font", "DroidSansMono.ttf");
+    */
   }
 
   regular_font = create_true_type_font(font_factory, regular_font_filename,
       font_height_in_pixel);
-  //load_ttf(&regular_face, regular_font_filename);
-  current_true_type_font = regular_font;
 
   if ( (italic_font_filename == NULL)
-      && (strcmp(italic_font_filename, regular_font_filename) == 0) ) {
+      || (strcmp(italic_font_filename, regular_font_filename) == 0) ) {
     italic_font = regular_font;
+    italic_font_available = false;
   }
   else {
     italic_font = create_true_type_font(font_factory, italic_font_filename,
         font_height_in_pixel);
+    italic_font_available = true;
   }
 
   if ( (bold_font_filename == NULL)
-      && (strcmp(bold_font_filename, regular_font_filename) == 0) ) {
+      || (strcmp(bold_font_filename, regular_font_filename) == 0) ) {
     bold_font = regular_font;
+    bold_font_available = false;
   }
   else {
     bold_font = create_true_type_font(font_factory, bold_font_filename,
         font_height_in_pixel);
+    bold_font_available = true;
   }
 
   if ( (bold_italic_font_filename == NULL)
-      && (strcmp(bold_italic_font_filename, regular_font_filename) == 0) ) {
+      || (strcmp(bold_italic_font_filename, regular_font_filename) == 0) ) {
     bold_italic_font = regular_font;
   }
   else {
@@ -1114,7 +1250,48 @@ static void link_interface_to_story(struct z_story *story) {
       = create_true_type_font(font_factory, bold_italic_font_filename,
           font_height_in_pixel);
   }
-  
+
+  if ( (fixed_regular_font_filename == NULL)
+      || (strcmp(fixed_regular_font_filename, regular_font_filename) == 0) ) {
+    fixed_regular_font = regular_font;
+    fixed_font_available = false;
+  }
+  else {
+    fixed_regular_font = create_true_type_font(font_factory,
+        fixed_regular_font_filename, font_height_in_pixel);
+    fixed_font_available = true;
+  }
+
+  if ( (fixed_italic_font_filename == NULL)
+      || (strcmp(fixed_italic_font_filename,
+          fixed_regular_font_filename) == 0) ) {
+    fixed_italic_font = fixed_regular_font;
+  }
+  else {
+    fixed_italic_font = create_true_type_font(font_factory,
+        fixed_italic_font_filename, font_height_in_pixel);
+  }
+
+  if ( (fixed_bold_font_filename == NULL)
+      || (strcmp(fixed_bold_font_filename,
+          fixed_regular_font_filename) == 0) ) {
+    fixed_bold_font = fixed_regular_font;
+  }
+  else {
+    fixed_bold_font = create_true_type_font(font_factory,
+        fixed_bold_font_filename, font_height_in_pixel);
+  }
+
+  if ( (fixed_bold_italic_font_filename == NULL)
+      || (strcmp(fixed_bold_italic_font_filename,
+          fixed_regular_font_filename) == 0) ) {
+    fixed_bold_italic_font = fixed_regular_font;
+  }
+  else {
+    fixed_bold_italic_font = create_true_type_font(font_factory,
+        fixed_bold_italic_font_filename, font_height_in_pixel);
+  }
+
   line_height = font_height_in_pixel + 4;
 
   /*
@@ -1192,6 +1369,10 @@ static void link_interface_to_story(struct z_story *story) {
     z_windows[i]->xpos = 1;
     z_windows[i]->text_style = Z_STYLE_ROMAN;
     z_windows[i]->output_text_style = Z_STYLE_ROMAN;
+    z_windows[i]->font_type = Z_FONT_NORMAL;
+    z_windows[i]->output_font = Z_FONT_NORMAL;
+    z_windows[i]->output_true_type_font = regular_font;
+    z_windows[i]->fixedfont_forced_by_flags2 = z_mem[0x11] & 2 ? true : false;
     z_windows[i]->nof_consecutive_lines_output = 0;
 
     if (i == 0) {
@@ -1219,6 +1400,11 @@ static void link_interface_to_story(struct z_story *story) {
         z_windows[i]->xsize = screen_width_in_pixel;
         if (statusline_window_id > 0)
           z_windows[i]->ypos++;
+        if (ver != 6) {
+          z_windows[i]->font_type = Z_FONT_COURIER_FIXED_PITCH;
+          z_windows[i]->output_font = Z_FONT_COURIER_FIXED_PITCH;
+          z_windows[i]->output_true_type_font = fixed_regular_font;
+        }
       }
       else if (i == statusline_window_id) {
         z_windows[i]->ysize = line_height;
@@ -1256,6 +1442,10 @@ static void link_interface_to_story(struct z_story *story) {
         &z_ucs_output_window_target,
         (void*)(&z_windows[i]->window_number),
         hyphenation_enabled);
+    if (z_windows[i]->buffering == true) {
+      z_windows[i]->current_wrapper_style = z_windows[i]->text_style;
+      z_windows[i]->current_wrapper_font = z_windows[i]->font_type;
+    }
   }
 
   active_z_window_id = 0;
@@ -1370,7 +1560,22 @@ static int pixel_close_interface(z_ucs *error_message) {
 }
 
 
-static void set_buffer_mode(uint8_t UNUSED(new_buffer_mode)) {
+static void set_buffer_mode(uint8_t new_buffer_mode) {
+  // For non v6 versions:
+  // If set to 1, text output on the lower window in stream 1 is buffered
+  // up so that it can be word-wrapped properly. If set to 0, it isn't.
+  if (new_buffer_mode == 0) {
+    // In case buffering is not desired we might have to flush the buffer.
+    if (z_windows[0]->buffering == true) {
+      freetype_wordwrap_flush_output(z_windows[0]->wordwrapper);
+    }
+    z_windows[0]->buffering = false;
+  }
+  else {
+    z_windows[0]->current_wrapper_style = z_windows[0]->text_style;
+    z_windows[0]->current_wrapper_font = z_windows[0]->font_type;
+    z_windows[0]->buffering = true;
+  }
 }
 
 
@@ -1443,9 +1648,6 @@ static void erase_window(int16_t window_number) {
     if (bool_equal(z_windows[window_number]->buffering, true))
       freetype_wordwrap_flush_output(z_windows[window_number]->wordwrapper);
 
-    update_output_colours(window_number);
-    update_output_text_style(window_number);
-
     /*
     screen_pixel_interface->clear_area(
         z_windows[window_number]->xpos,
@@ -1466,39 +1668,35 @@ static void erase_window(int16_t window_number) {
 
 static void set_text_style(z_style text_style) {
   int i;
-  true_type_font *new_font;
-  z_style new_style;
 
   TRACE_LOG("New text style is %d.\n", text_style);
-  //z_windows[active_z_window_id]->text_style = text_style;
 
   for (i=0; i<nof_active_z_windows; i++) {
-    if (bool_equal(z_windows[i]->buffering, false))
+    if (bool_equal(z_windows[i]->buffering, false)) {
       if (text_style == Z_STYLE_ROMAN)
-        z_windows[i]->output_text_style = new_style;
+        z_windows[i]->output_text_style = Z_STYLE_ROMAN;
       else
         z_windows[i]->output_text_style |= text_style;
+      update_window_true_type_font(i, z_windows[i]->fixedfont_forced_by_flags2);
+    }
     else {
-      if (text_style & Z_STYLE_BOLD) {
-        if (text_style & Z_STYLE_ITALIC) {
-          new_font = bold_italic_font;
-        }
-        else {
-          new_font = bold_font;
-        }
-      }
-      else if (text_style & Z_STYLE_ITALIC) {
-        new_font = italic_font;
-      }
-      else {
-        new_font = regular_font;
-      }
+      if (text_style == Z_STYLE_ROMAN)
+        z_windows[i]->current_wrapper_style = Z_STYLE_ROMAN;
+      else
+        z_windows[i]->current_wrapper_style |= text_style;
+
       freetype_wordwrap_insert_metadata(
           z_windows[i]->wordwrapper,
           &wordwrap_output_style,
           (void*)(&z_windows[i]->window_number),
-          (uint32_t)text_style,
-          new_font);
+          (uint32_t)(text_style
+            | (z_windows[i]->fixedfont_forced_by_flags2 == true
+              ? Z_STYLE_FIXED_PITCH
+              : 0)),
+          evaluate_font(
+            z_windows[i]->current_wrapper_style,
+            z_windows[i]->current_wrapper_font,
+            z_windows[i]->fixedfont_forced_by_flags2));
     }
   }
 }
@@ -1557,12 +1755,34 @@ static void set_colour(z_colour foreground, z_colour background,
 }
 
 
-static void set_font(z_font UNUSED(font_type)) {
+static void set_font(z_font font) {
+  int i;
+
+  TRACE_LOG("New font is %d.\n", font);
+
+  for (i=0; i<nof_active_z_windows; i++) {
+
+    if (bool_equal(z_windows[i]->buffering, false)) {
+      z_windows[i]->output_font = font;
+      update_window_true_type_font(i, z_windows[i]->fixedfont_forced_by_flags2);
+    }
+    else {
+      z_windows[i]->current_wrapper_font = font;
+      freetype_wordwrap_insert_metadata(
+          z_windows[i]->wordwrapper,
+          &wordwrap_output_font,
+          (void*)(&z_windows[i]->window_number),
+          (uint32_t)font,
+          evaluate_font(
+            z_windows[i]->current_wrapper_style,
+            z_windows[i]->current_wrapper_font,
+            z_windows[i]->fixedfont_forced_by_flags2));
+    }
+  }
 }
 
 
-
-  /*
+/*
 static void history_set_text_style(z_style UNUSED(text_style)) {
   if (refresh_count_mode == false)
   {
@@ -1726,8 +1946,6 @@ static void refresh_input_line(bool display_cursor) {
         line_height,
         z_windows[0]->output_background_colour);
   }
-
-  update_output_text_style(0);
 
   nof_line_breaks = draw_glyph_string(current_input_buffer, 0, bold_font);
   TRACE_LOG("nof_line_breaks: %d\n", nof_line_breaks);
@@ -1994,7 +2212,6 @@ static void refresh_screen() {
   }
 
   update_output_colours(0);
-  update_output_text_style(0);
 
   //refresh_cursor(0);
   screen_pixel_interface->update_screen();
@@ -2335,8 +2552,6 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
     timed_input_active = false;
 
   screen_pixel_interface->update_screen();
-  update_output_colours(active_z_window_id);
-  update_output_text_style(active_z_window_id);
 
   TRACE_LOG("y: %d, %d\n",
       z_windows[active_z_window_id]->ypos,
