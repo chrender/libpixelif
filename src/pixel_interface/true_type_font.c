@@ -71,6 +71,13 @@ int tt_get_glyph_advance(true_type_font *font, z_ucs current_char,
 }
 
 
+// NOTE: Glyph pixels are only drawn in case they are not completely
+// equal to background color. This is required, since especially in case
+// of italic faces hori_advance may be smaller(!) then the width of a
+// glyph, causing characters to overlay on screen. This may be reproduced
+// by using "SourceSansPro-It.ttf" in etude.z5 section 4 and looking at
+// "Test of italic (or underlined) text." where the closing bracket
+// overwrites the right d's vertical stroke.
 int tt_draw_glyph(true_type_font *font, int x, int y,
     struct z_screen_pixel_interface *screen_pixel_interface,
     z_ucs charcode) {
@@ -79,6 +86,7 @@ int tt_draw_glyph(true_type_font *font, int x, int y,
   //FT_Vector kerning;
   int ft_error;
   int screen_x, screen_y, advance, start_x, bitmap_x, bitmap_y;
+  uint32_t pixel;
 
   FT_UInt glyph_index = FT_Get_Char_Index(font->face, charcode);
 
@@ -120,10 +128,11 @@ int tt_draw_glyph(true_type_font *font, int x, int y,
   for (bitmap_y=0; bitmap_y<bitmap.rows; bitmap_y++, screen_y++) {
     screen_x = start_x;
     for (bitmap_x=0; bitmap_x<bitmap.width; bitmap_x++, screen_x++) {
-      screen_pixel_interface->draw_grayscale_pixel(
-          screen_y,
-          screen_x,
-          255-bitmap.buffer[bitmap_y*bitmap.width + bitmap_x]);
+      pixel = bitmap.buffer[bitmap_y*bitmap.width + bitmap_x];
+      if (pixel) {
+        screen_pixel_interface->draw_grayscale_pixel(
+            screen_y, screen_x, 255-pixel);
+      }
     }
   }
 
