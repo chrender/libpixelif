@@ -2,6 +2,7 @@
 AUTOMAKE_OPTIONS = -Wno-override
 
 localedir = $(datarootdir)/fizmo/locales
+fontdir = $(datarootdir)/fizmo/fonts
 
 fizmo_build_prefix=$(DEV_BUILD_PREFIX)
 
@@ -38,11 +39,13 @@ install-dev:: libpixelif.a
 	echo 'Libs: -L$(fizmo_build_prefix)/lib/fizmo -lpixelif' >>$(PKGFILE)
 	echo >>$(PKGFILE)
 
-install-locales:
+install-data:
 	mkdir -p "$(DESTDIR)$(localedir)"
 	for l in `cd src/locales ; ls -d ??_??`; \
         do \
           mkdir -p "$(DESTDIR)$(localedir)/$$l" ; \
           cp src/locales/$$l/*.txt "$(DESTDIR)$(localedir)/$$l" ; \
         done
+	mkdir -p $(DESTDIR)$(fontdir)
+	cp -r fonts/* $(DESTDIR)$(fontdir)
 
