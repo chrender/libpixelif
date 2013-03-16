@@ -39,7 +39,7 @@ install-dev:: libpixelif.a
 	echo 'Libs: -L$(fizmo_build_prefix)/lib/fizmo -lpixelif' >>$(PKGFILE)
 	echo >>$(PKGFILE)
 
-install-data:
+install-data-local:
 	mkdir -p "$(DESTDIR)$(localedir)"
 	for l in `cd src/locales ; ls -d ??_??`; \
         do \
