@@ -151,17 +151,25 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
   output_index = 0;
   while (metadata_index < wrapper->metadata_index) {
 
+    // Look which buffer position is affected by the next metadata entry.
     output_metadata_index =
       wrapper->metadata[metadata_index].output_index;
 
     TRACE_LOG("mdoutput: mdindex: %d, flushindex: %d\n",
         output_metadata_index, flush_index);
 
+    // In case it's behind the current flush position, there's nothing
+    // more to do.
     if (output_metadata_index > flush_index) {
      break;
     }
 
+    // In case current output position is before the metadata entry's
+    // output position, we'll flush everything until this position.
     if (output_index < output_metadata_index) {
+      TRACE_LOG("Flusing up to next metadata entry at %ld\n",
+          output_metadata_index);
+
       buf = wrapper->input_buffer[output_metadata_index];
       wrapper->input_buffer[output_metadata_index] = 0;
       wrapper->wrapped_text_output_destination(
@@ -171,13 +179,14 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
       output_index = output_metadata_index;
     }
 
+    // We can now flush all the metadata entries at the current position.
     while ( (metadata_index < wrapper->metadata_index)
         && (wrapper->metadata[metadata_index].output_index
           == output_metadata_index) ) {
 
       metadata_entry = &wrapper->metadata[metadata_index];
 
-      TRACE_LOG("Output metadata prm %d at %ld.\n",
+      TRACE_LOG("Output metadata prm %d at buffer position %ld.\n",
           metadata_entry->int_parameter,
           output_metadata_index);
 
@@ -187,6 +196,16 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
 
       metadata_index++;
     }
+  }
+
+  if (metadata_index > 0) {
+    TRACE_LOG("Removing %d metadata entries.\n", metadata_index);
+    memmove(
+        wrapper->metadata,
+        &wrapper->metadata[metadata_index],
+        (wrapper->metadata_index - metadata_index) * sizeof(
+          struct freetype_wordwrap_metadata));
+    wrapper->metadata_index -= metadata_index;
   }
 
   buf = wrapper->input_buffer[flush_index];

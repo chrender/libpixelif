@@ -35,6 +35,7 @@
 
 #include "true_type_factory.h"
 #include "true_type_font.h"
+#include "tools/tracelog.h"
 #include "tools/i18n.h"
 #include "tools/filesys.h"
 #include "interpreter/fizmo.h"
@@ -74,7 +75,7 @@ static void close_ft_stream(FT_Stream stream) {
 
 
 true_type_font *create_true_type_font(true_type_factory *factory,
-    char *font_filename, int pixel_size) {
+    char *font_filename, int pixel_size, int line_height) {
   int ft_error;
   z_file *fontfile;
   char *token, *filename;
@@ -86,6 +87,7 @@ true_type_font *create_true_type_font(true_type_factory *factory,
   if (factory->font_search_path == NULL)
     return NULL;
 
+  TRACE_LOG("Loading font %s\n");
   token = strtok(factory->font_search_path, ":");
   fontfile = NULL;
   while (token) {
@@ -142,6 +144,9 @@ true_type_font *create_true_type_font(true_type_factory *factory,
     // ... be opened or read, or simply that it is broken...
     return NULL;
   }
+
+  result->font_height_in_pixel = pixel_size;
+  result->line_height = line_height;
 
   ft_error = FT_Set_Pixel_Sizes(
       result->face,

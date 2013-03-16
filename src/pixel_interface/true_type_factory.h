@@ -44,7 +44,7 @@ typedef struct true_type_factory_struct true_type_factory;
 
 true_type_factory *create_true_type_factory(char *font_search_path);
 true_type_font *create_true_type_font(true_type_factory *factory,
-    char *font_filename, int font_height_in_pixel);
+    char *font_filename, int font_height_in_pixel, int line_height);
 void destroy_true_type_factory(true_type_factory *factory);
 
 #endif // true_type_factory_h_INCLUDED

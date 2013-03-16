@@ -61,6 +61,8 @@
 #include "../screen_interface/screen_pixel_interface.h"
 #include "../locales/libpixelif_locales.h"
 
+#define Z_STYLE_NONRESET (Z_STYLE_REVERSE_VIDEO | Z_STYLE_BOLD | Z_STYLE_ITALIC)
+ 
 // 8.8.1
 // The display is an array of pixels. Coordinates are usually given (in units)
 // in the form (y,x), with (1,1) in the top left.
@@ -73,6 +75,7 @@ struct z_window {
   int xsize;
   int ycursorpos; // 1 is topmost position
   int xcursorpos; // 1 is leftmost position
+  int last_gylphs_xcursorpos; // 1 is leftmost position
   int leftmargin;
   int rightmargin;
   uint32_t newline_routine;
@@ -221,6 +224,7 @@ static void refresh_cursor(int UNUSED(window_id)) {
 
 static void break_line(int window_number) {
   z_windows[window_number]->xcursorpos = 1;
+  z_windows[window_number]->last_gylphs_xcursorpos = -1;
 
   TRACE_LOG("y+lh:%d / ysize-1:%d\n",
       z_windows[window_number]->ycursorpos + 2*line_height - 1,
@@ -256,7 +260,6 @@ static void break_line(int window_number) {
         z_windows[window_number]->xsize,
         line_height,
         z_windows[window_number]->output_background_colour);
-    //new_z_rgb_color(255, 255, 255));
   }
   else {
     TRACE_LOG("breaking line\n");
@@ -269,10 +272,21 @@ static void break_line(int window_number) {
 static int draw_glyph(z_ucs charcode, int window_number,
     true_type_font *font) {
   int x, y, advance, result = 0;
+  bool reverse = false;
+  z_rgb_colour foreground_colour, background_colour;
 
   if (charcode == Z_UCS_NEWLINE) {
     break_line(window_number);
     return 1;
+  }
+
+  if (bool_equal(z_windows[window_number]->buffering, true)) {
+    if (z_windows[window_number]->output_text_style & Z_STYLE_REVERSE_VIDEO)
+      reverse = true;
+  }
+  else {
+    if (z_windows[window_number]->text_style & Z_STYLE_REVERSE_VIDEO)
+      reverse = true;
   }
 
   advance = tt_get_glyph_advance(font, charcode, 0);
@@ -295,15 +309,26 @@ static int draw_glyph(z_ucs charcode, int window_number,
   TRACE_LOG("Drawing glyph %c / %d at %d, %d.\n",
       charcode, charcode, x, y);
 
+  foreground_colour = z_to_rgb_colour(
+      z_windows[window_number]->output_foreground_colour);
+
+  background_colour = z_to_rgb_colour(
+      z_windows[window_number]->output_background_colour);
+
   //advance = tt_draw_glyph(
   tt_draw_glyph(
       font,
       x,
       y,
+      foreground_colour,
+      background_colour,
       screen_pixel_interface,
-      charcode);
+      charcode,
+      reverse,
+      &z_windows[window_number]->last_gylphs_xcursorpos);
 
-  z_windows[window_number]->xcursorpos += advance;
+  z_windows[window_number]->xcursorpos
+    += advance;
 
   return result;
 }
@@ -347,32 +372,40 @@ static true_type_font *evaluate_font(z_style text_style, z_font font,
     if (text_style & Z_STYLE_BOLD) {
       if (text_style & Z_STYLE_ITALIC) {
         result = fixed_bold_italic_font;
+        TRACE_LOG("evaluted font: fixed_bold_italic_font\n");
       }
       else {
         result = fixed_bold_font;
+        TRACE_LOG("evaluted font: fixed_bold_font\n");
       }
     }
     else if (text_style & Z_STYLE_ITALIC) {
       result = fixed_italic_font;
+      TRACE_LOG("evaluted font: fixed_italic_font\n");
     }
     else {
       result = fixed_regular_font;
+      TRACE_LOG("evaluted font: fixed_regular_font\n");
     }
   }
   else {
     if (text_style & Z_STYLE_BOLD) {
       if (text_style & Z_STYLE_ITALIC) {
         result = bold_italic_font;
+        TRACE_LOG("evaluted font: bold_italic_font\n");
       }
       else {
         result = bold_font;
+        TRACE_LOG("evaluted font: bold_font\n");
       }
     }
     else if (text_style & Z_STYLE_ITALIC) {
       result = italic_font;
+      TRACE_LOG("evaluted font: italic_font\n");
     }
     else {
       result = regular_font;
+      TRACE_LOG("evaluted font: regular_font\n");
     }
   }
 
@@ -395,10 +428,12 @@ static void wordwrap_output_style(void *window_number, uint32_t style_data) {
   TRACE_LOG("wordwrap-style:%d.\n", style_data);
   TRACE_LOG("window: %d.\n", window_id);
 
-  if (style_data == Z_STYLE_ROMAN)
-    z_windows[window_id]->output_text_style = Z_STYLE_ROMAN;
-  else
+  if (style_data & Z_STYLE_NONRESET)
     z_windows[window_id]->output_text_style |= style_data;
+  else
+    z_windows[window_id]->output_text_style = style_data;
+  TRACE_LOG("Resulting wordwrap-style:%d.\n",
+      z_windows[window_id]->output_text_style);
   update_window_true_type_font(window_id, false);
 }
 
@@ -1086,6 +1121,7 @@ static void z_ucs_output(z_ucs *z_ucs_output) {
   TRACE_LOG("\" to window %d, buffering: %d.\n",
       active_z_window_id,
       active_z_window_id != -1 ? z_windows[active_z_window_id]->buffering : -1);
+  TRACE_LOG("z-mem 0x11 & 2: %d\n", z_mem[0x11] & 2);
 
   if (((z_windows[active_z_window_id]->fixedfont_forced_by_flags2 == false)
         && (z_mem[0x11] & 2))
@@ -1208,16 +1244,17 @@ static void link_interface_to_story(struct z_story *story) {
     set_configuration_value("italic-font", "SourceSansPro-It.ttf");
     set_configuration_value("bold-font", "SourceSansPro-Bold.ttf");
     set_configuration_value("bold-italic-font", "SourceSansPro-BoldIt.ttf");
-    /*
-    set_configuration_value("fixed-regular-font", "DroidSansMono.ttf");
-    set_configuration_value("fixed-italic-font", "DroidSansMono.ttf");
-    set_configuration_value("fixed-bold-font", "DroidSansMono.ttf");
-    set_configuration_value("fixed-italic-bold-font", "DroidSansMono.ttf");
-    */
+
+    set_configuration_value("fixed-regular-font", "SourceCodePro-Regular.ttf");
+    set_configuration_value("fixed-italic-font", "SourceCodePro-Regular.ttf");
+    set_configuration_value("fixed-bold-font", "SourceCodePro-Bold.ttf");
+    set_configuration_value("fixed-bold-italic-font", "SourceCodePro-Bold.ttf");
   }
 
+  line_height = font_height_in_pixel + 4;
+
   regular_font = create_true_type_font(font_factory, regular_font_filename,
-      font_height_in_pixel);
+      font_height_in_pixel, line_height);
 
   if ( (italic_font_filename == NULL)
       || (strcmp(italic_font_filename, regular_font_filename) == 0) ) {
@@ -1226,7 +1263,7 @@ static void link_interface_to_story(struct z_story *story) {
   }
   else {
     italic_font = create_true_type_font(font_factory, italic_font_filename,
-        font_height_in_pixel);
+        font_height_in_pixel, line_height);
     italic_font_available = true;
   }
 
@@ -1237,7 +1274,7 @@ static void link_interface_to_story(struct z_story *story) {
   }
   else {
     bold_font = create_true_type_font(font_factory, bold_font_filename,
-        font_height_in_pixel);
+        font_height_in_pixel, line_height);
     bold_font_available = true;
   }
 
@@ -1248,7 +1285,7 @@ static void link_interface_to_story(struct z_story *story) {
   else {
     bold_italic_font
       = create_true_type_font(font_factory, bold_italic_font_filename,
-          font_height_in_pixel);
+          font_height_in_pixel, line_height);
   }
 
   if ( (fixed_regular_font_filename == NULL)
@@ -1258,7 +1295,7 @@ static void link_interface_to_story(struct z_story *story) {
   }
   else {
     fixed_regular_font = create_true_type_font(font_factory,
-        fixed_regular_font_filename, font_height_in_pixel);
+        fixed_regular_font_filename, font_height_in_pixel, line_height);
     fixed_font_available = true;
   }
 
@@ -1269,7 +1306,7 @@ static void link_interface_to_story(struct z_story *story) {
   }
   else {
     fixed_italic_font = create_true_type_font(font_factory,
-        fixed_italic_font_filename, font_height_in_pixel);
+        fixed_italic_font_filename, font_height_in_pixel, line_height);
   }
 
   if ( (fixed_bold_font_filename == NULL)
@@ -1279,7 +1316,7 @@ static void link_interface_to_story(struct z_story *story) {
   }
   else {
     fixed_bold_font = create_true_type_font(font_factory,
-        fixed_bold_font_filename, font_height_in_pixel);
+        fixed_bold_font_filename, font_height_in_pixel, line_height);
   }
 
   if ( (fixed_bold_italic_font_filename == NULL)
@@ -1289,41 +1326,8 @@ static void link_interface_to_story(struct z_story *story) {
   }
   else {
     fixed_bold_italic_font = create_true_type_font(font_factory,
-        fixed_bold_italic_font_filename, font_height_in_pixel);
+        fixed_bold_italic_font_filename, font_height_in_pixel, line_height);
   }
-
-  line_height = font_height_in_pixel + 4;
-
-  /*
-  FT_UInt glyph_index = FT_Get_Char_Index( current_face, 'a');
-
-  ft_error = FT_Load_Glyph(
-      current_face,
-      glyph_index,
-      FT_LOAD_DEFAULT);
-
-  ft_error = FT_Render_Glyph(
-      current_face->glyph,
-      FT_RENDER_MODE_NORMAL);
-
-  slot = current_face->glyph;
-
-  bitmap = slot->bitmap;
-
-  for (y=0; y<bitmap.rows; y++)
-  {
-    for (x=0; x<bitmap.width; x++)
-    {
-      screen_pixel_interface->draw_grayscale_pixel(
-          y, x, bitmap.buffer[y*bitmap.width + x]);
-    }
-  }
-
-  screen_pixel_interface->update_screen();
-  do
-    event_type = screen_pixel_interface->get_next_event(&input, 0);
-  while (event_type != EVENT_WAS_INPUT);
-  */
 
   if (ver >= 5) {
     if ( (color_disabled == false)
@@ -1420,8 +1424,8 @@ static void link_interface_to_story(struct z_story *story) {
 
     z_windows[i]->ycursorpos
       = (ver >= 5 ? 1 : (z_windows[i]->ysize - line_height));
-    z_windows[i]->xcursorpos
-      = 1;
+    z_windows[i]->xcursorpos = 1;
+    z_windows[i]->last_gylphs_xcursorpos = -1;
 
     z_windows[i]->newline_routine = 0;
     z_windows[i]->interrupt_countdown = 0;
@@ -1605,12 +1609,14 @@ static void split_window(int16_t nof_lines) {
 
       if (z_windows[0]->ycursorpos < 1) {
         z_windows[0]->xcursorpos = 1;
+        z_windows[0]->last_gylphs_xcursorpos = -1;
         z_windows[0]->ycursorpos = 1;
         TRACE_LOG("Re-adjusting cursor for lower window.\n");
       }
 
       if (z_windows[1]->ycursorpos > z_windows[1]->ysize) {
         z_windows[1]->xcursorpos = 1;
+        z_windows[1]->last_gylphs_xcursorpos = -1;
         z_windows[1]->ycursorpos = 1;
         TRACE_LOG("Re-adjusting cursor for upper window.\n");
       }
@@ -1658,6 +1664,8 @@ static void erase_window(int16_t window_number) {
 
     z_windows[window_number]->xcursorpos
       = 1 + z_windows[window_number]->leftmargin;
+    z_windows[window_number]->last_gylphs_xcursorpos
+      = -1;
     z_windows[window_number]->ycursorpos
       = (ver >= 5 ? 1 : (z_windows[window_number]->ysize - line_height));
 
@@ -1673,17 +1681,21 @@ static void set_text_style(z_style text_style) {
 
   for (i=0; i<nof_active_z_windows; i++) {
     if (bool_equal(z_windows[i]->buffering, false)) {
-      if (text_style == Z_STYLE_ROMAN)
-        z_windows[i]->output_text_style = Z_STYLE_ROMAN;
-      else
+      if (text_style & Z_STYLE_NONRESET)
         z_windows[i]->output_text_style |= text_style;
+      else
+        z_windows[i]->output_text_style = text_style;
+      TRACE_LOG("Resulting text style is %d.\n",
+          z_windows[i]->output_text_style);
       update_window_true_type_font(i, z_windows[i]->fixedfont_forced_by_flags2);
     }
     else {
-      if (text_style == Z_STYLE_ROMAN)
-        z_windows[i]->current_wrapper_style = Z_STYLE_ROMAN;
-      else
+      if (text_style & Z_STYLE_NONRESET)
         z_windows[i]->current_wrapper_style |= text_style;
+      else
+        z_windows[i]->current_wrapper_style = text_style;
+      TRACE_LOG("Resulting text style is %d.\n",
+          z_windows[i]->current_wrapper_style);
 
       freetype_wordwrap_insert_metadata(
           z_windows[i]->wordwrapper,
@@ -1922,6 +1934,7 @@ static void refresh_input_line(bool display_cursor) {
       *current_input_x, *current_input_y);
   z_windows[0]->xcursorpos = *current_input_x - z_windows[0]->xpos
     - z_windows[0]->leftmargin;
+  z_windows[0]->last_gylphs_xcursorpos = -1;
   TRACE_LOG("xpos: %d, leftm:%d, xcurpos:%d\n",
       z_windows[0]->xpos,
       z_windows[0]->leftmargin,
@@ -2726,6 +2739,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
                 = *current_input_size > *current_input_display_width
                 ? *current_input_x + *current_input_display_width
                 : *current_input_x + *current_input_size;
+              z_windows[active_z_window_id]->last_gylphs_xcursorpos = -1;
               screen_pixel_interface->update_screen();
             }
 
@@ -3103,6 +3117,7 @@ static int read_char(uint16_t tenth_seconds, uint32_t verification_routine,
   flush_all_buffered_windows();
   for (i=0; i<nof_active_z_windows; i++)
     z_windows[i]->nof_consecutive_lines_output = 0;
+  screen_pixel_interface->update_screen();
 
   /*
   if (winch_found == true)
@@ -3263,6 +3278,7 @@ static void show_status(z_ucs *room_description, int status_line_mode,
   if (statusline_window_id > 0) {
     z_windows[statusline_window_id]->ycursorpos = 1;
     z_windows[statusline_window_id]->xcursorpos = 1;
+    z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
 
     last_active_z_window_id = active_z_window_id;
     switch_to_window(statusline_window_id);
@@ -3284,11 +3300,13 @@ static void show_status(z_ucs *room_description, int status_line_mode,
       }
 
       z_windows[statusline_window_id]->xcursorpos = 2;
+      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
       //refresh_cursor(statusline_window_id);
       z_ucs_output(room_description);
 
       z_windows[statusline_window_id]->xcursorpos
         = z_windows[statusline_window_id]->xsize - rightside_length + 1;
+      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
       //refresh_cursor(statusline_window_id);
 
       ptr = z_ucs_cpy(rightside_buf_zucs, libpixelif_score_string);
@@ -3313,11 +3331,13 @@ static void show_status(z_ucs *room_description, int status_line_mode,
       }
 
       z_windows[statusline_window_id]->xcursorpos = 2;
+      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
       //refresh_cursor(statusline_window_id);
       z_ucs_output(room_description);
 
       z_windows[statusline_window_id]->xcursorpos
         = z_windows[statusline_window_id]->xsize - 100;
+      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
       //refresh_cursor(statusline_window_id);
 
       sprintf(latin1_buf, "%02d:%02d", parameter1, parameter2);
@@ -3340,6 +3360,7 @@ static void set_window(int16_t window_number) {
     if ((ver != 6) && (window_number == 1)) {
       z_windows[1]->ycursorpos = 1;
       z_windows[1]->xcursorpos = 1;
+      z_windows[1]->last_gylphs_xcursorpos = -1;
     }
 
     switch_to_window(window_number);
@@ -3383,6 +3404,8 @@ static void set_cursor(int16_t line, int16_t column, int16_t window_number) {
           ? z_windows[window_number]->xsize + 1
           : z_windows[window_number]->xsize)
       : column;
+
+    z_windows[window_number]->last_gylphs_xcursorpos = -1;
 
     //refresh_cursor(window_number);
   }
