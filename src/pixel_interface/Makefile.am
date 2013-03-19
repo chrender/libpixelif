@@ -5,7 +5,7 @@ LDADD = $(libfizmo_LIBS) $(freetype2_LIBS)
 localedir = $(datarootdir)/fizmo/locales
 fontdir = $(datarootdir)/fizmo/fonts
 
-AM_CFLAGS += -DFONT_DEFAULT_SEARCH_PATH=\"$(fontdir)\"
+AM_CFLAGS += -DFONT_DEFAULT_SEARCH_PATH=\"$(fontdir):.:$(fontdir)/source-code-pro-1_017:$(fontdir)/source-sans-pro-1_038\"
 
 noinst_LIBRARIES = libpixelif.a
 libpixelif_a_SOURCES = ../locales/libpixelif_locales.c pixel_interface.c \

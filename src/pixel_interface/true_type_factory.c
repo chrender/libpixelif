@@ -56,6 +56,7 @@ true_type_factory *create_true_type_factory(char *font_search_path) {
   }
 
   result->font_search_path = strdup(font_search_path);
+  TRACE_LOG("factory path: %s\n", result->font_search_path);
 
   return result;
 }
@@ -78,7 +79,7 @@ true_type_font *create_true_type_font(true_type_factory *factory,
     char *font_filename, int pixel_size, int line_height) {
   int ft_error;
   z_file *fontfile;
-  char *token, *filename;
+  char *token, *filename, *path_copy;
   FT_Open_Args *openArgs;
   FT_Stream stream;
   long filesize;
@@ -88,14 +89,14 @@ true_type_font *create_true_type_font(true_type_factory *factory,
     return NULL;
 
   TRACE_LOG("Loading font %s\n");
-  token = strtok(factory->font_search_path, ":");
+  path_copy = strdup(factory->font_search_path);
+  token = strtok(path_copy, ":");
   fontfile = NULL;
   while (token) {
     filename = fizmo_malloc(strlen(token) + strlen(font_filename) + 2);
     strcpy(filename, token);
     strcat(filename, "/");
     strcat(filename, font_filename);
-    printf("%s\n", font_filename);
     if ((fontfile = fsi->openfile(filename, FILETYPE_DATA, FILEACCESS_READ))
         != NULL) {  
       free(filename);
@@ -104,19 +105,16 @@ true_type_font *create_true_type_font(true_type_factory *factory,
     free(filename);
     token = strtok(NULL, ":");
   }
+  free(path_copy);
 
   if (fontfile == NULL) {
-    printf("Font %s not found.\n", font_filename);
+    TRACE_LOG("Font %s not found.\n", font_filename);
     return NULL;
   }
-
-  printf("ok\n");
 
   fsi->setfilepos(fontfile, 0, SEEK_END);
   filesize = fsi->getfilepos(fontfile);
   fsi->setfilepos(fontfile, 0, SEEK_SET);
-
-  printf("filesize: %ld\n", filesize);
 
   openArgs = (FT_Open_Args *)fizmo_malloc(sizeof(FT_Open_Args));
   stream = (FT_Stream)fizmo_malloc(sizeof(FT_StreamRec));
