@@ -41,7 +41,7 @@ struct freetype_wordwrap_metadata {
   void (*metadata_output_function)(void *ptr_parameter, uint32_t int_parameter);
   void *ptr_parameter;
   uint32_t int_parameter;
-  true_type_font *new_font;
+  //true_type_font *new_font;
 };
 
 

@@ -87,6 +87,9 @@ true_type_wordwrapper *create_true_type_wordwrapper(true_type_font *font,
   result->metadata_index = 0;
   set_font(result, font);
 
+  TRACE_LOG("Created new wordwrapper %p with line length %d.\n",
+      result, line_length);
+
   return result;
 }
 
@@ -310,6 +313,7 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
           wrapper->line_length);
 
       if (wrapper->current_advance_position > wrapper->line_length) {
+        TRACE_LOG("Behind past line, match on space|newline, breaking.\n");
         // In case we exceed the right margin, we have to break the line
         // before the last word.
 
@@ -342,7 +346,9 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
             = wrapper->current_buffer_index;
         }
       }
-      else if (current_char == Z_UCS_NEWLINE) {
+
+      if (current_char == Z_UCS_NEWLINE) {
+        TRACE_LOG("Flushing on newline at current position.\n");
         // In case everything fits into the current line and the current
         // char is a newline, we can simply flush at the current position.
         flush_line(
@@ -353,17 +359,15 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
         wrapper->current_advance_position = 0;
         wrapper->last_word_end_index = -1;
       }
-      else {
+      else if ( (current_char == Z_UCS_SPACE) && (last_char != Z_UCS_SPACE) ) {
         // If we're not past the right margin and the current char is not
         // a newline, we've encountered a space and a word end.
-        if (last_char != Z_UCS_SPACE) {
-          TRACE_LOG("lweap-at-space: %ld\n",
-              wrapper->last_word_end_advance_position);
-          wrapper->last_word_end_advance_position
-            = wrapper->current_advance_position;
-          wrapper->last_word_end_index
-            = wrapper->current_buffer_index - 1;
-        }
+        TRACE_LOG("lweap-at-space: %ld\n",
+            wrapper->last_word_end_advance_position);
+        wrapper->last_word_end_advance_position
+          = wrapper->current_advance_position;
+        wrapper->last_word_end_index
+          = wrapper->current_buffer_index - 1;
       }
     }
 
@@ -416,8 +420,12 @@ void freetype_wordwrap_insert_metadata(true_type_wordwrapper *wrapper,
     = ptr_parameter;
   wrapper->metadata[wrapper->metadata_index].int_parameter
     = int_parameter;
-  wrapper->metadata[wrapper->metadata_index].new_font
-    = new_font;
+  //wrapper->metadata[wrapper->metadata_index].new_font
+  // = new_font;
+
+  if (new_font != NULL) {
+    set_font(wrapper, new_font);
+  }
 
   TRACE_LOG("Added new metadata entry at %ld with int-parameter %ld, ptr:%p.\n",
       wrapper->current_buffer_index,
@@ -429,6 +437,8 @@ void freetype_wordwrap_insert_metadata(true_type_wordwrapper *wrapper,
 
 void freetype_wordwrap_adjust_line_length(true_type_wordwrapper *wrapper,
     size_t new_line_length) {
+  TRACE_LOG("wordwrapper adjusted for new line length %d.\n",
+      new_line_length);
   wrapper->line_length = new_line_length;
 }
 
