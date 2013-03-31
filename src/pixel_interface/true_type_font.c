@@ -35,6 +35,7 @@
 
 #include "true_type_font.h"
 #include "tools/unused.h"
+#include "tools/tracelog.h"
 
 
 /*
@@ -79,16 +80,20 @@ int tt_get_glyph_advance(true_type_font *font, z_ucs current_char,
 // "Test of italic (or underlined) text." where the closing bracket
 // overwrites the right d's vertical stroke.
 int tt_draw_glyph(true_type_font *font, int x, int y,
-    z_rgb_colour UNUSED(foreground_colour),
-    z_rgb_colour UNUSED(background_colour),
+    z_rgb_colour foreground_colour,
+    z_rgb_colour background_colour,
     struct z_screen_pixel_interface *screen_pixel_interface,
-    z_ucs charcode, bool reverse, int *last_gylphs_xcursorpos) {
+    z_ucs charcode, int *last_gylphs_xcursorpos) {
   FT_GlyphSlot slot;
   FT_Bitmap bitmap;
   //FT_Vector kerning;
   int ft_error, left_reverse_x, reverse_width;
   int screen_x, screen_y, advance, start_x, bitmap_x, bitmap_y;
-  uint32_t pixel, pixel_value;
+  uint8_t pixel;
+  float pixel_value;
+  int dr, dg, db; // delta from foreground to background
+  uint8_t br, bg, bb; // pre-evaluated background colors
+  int draw_width;
 
   FT_UInt glyph_index = FT_Get_Char_Index(font->face, charcode);
 
@@ -103,31 +108,33 @@ int tt_draw_glyph(true_type_font *font, int x, int y,
 
   slot = font->face->glyph;
   bitmap = slot->bitmap;
+  advance = slot->advance.x / 64;
 
-  if (reverse == true) {
+  draw_width
+    = advance > bitmap.width ? advance : bitmap.width;
 
-    if ((last_gylphs_xcursorpos) && (*last_gylphs_xcursorpos >= 0)) {
-      left_reverse_x
-        = *last_gylphs_xcursorpos + 2;
-      reverse_width
-        = x + slot->bitmap_left + bitmap.width - *last_gylphs_xcursorpos + 2;
-    }
-    else {
-      left_reverse_x = x;
-      reverse_width = slot->bitmap_left + bitmap.width + 2;
-    }
-
-    if (last_gylphs_xcursorpos) {
-      *last_gylphs_xcursorpos = x + slot->bitmap_left + bitmap.width;
-    }
-
-    screen_pixel_interface->fill_area(
-        left_reverse_x,
-        y,
-        reverse_width,
-        font->line_height,
-        Z_COLOUR_BLACK);
+  //printf("last_gylphs_xcursorpos: %d, x: %d.\n", *last_gylphs_xcursorpos, x);
+  if ((last_gylphs_xcursorpos) && (*last_gylphs_xcursorpos >= 0)) {
+    left_reverse_x
+      = *last_gylphs_xcursorpos + 1;
+    reverse_width
+      = x + slot->bitmap_left + draw_width - *last_gylphs_xcursorpos + 1;
   }
+  else {
+    left_reverse_x = x;
+    reverse_width = slot->bitmap_left + draw_width + 1;
+  }
+
+  if (last_gylphs_xcursorpos) {
+    *last_gylphs_xcursorpos = x + slot->bitmap_left + draw_width;
+  }
+
+  screen_pixel_interface->fill_area(
+      left_reverse_x,
+      y,
+      reverse_width,
+      font->line_height,
+      background_colour);
 
   x += slot->bitmap_left;
   y += font->face->size->metrics.ascender/64 - slot->bitmap_top;
@@ -136,7 +143,6 @@ int tt_draw_glyph(true_type_font *font, int x, int y,
   // FT_Done_FreeType
   
   //use_kerning = FT_HAS_KERNING(font->face);
-  advance = slot->advance.x / 64;
 
   /*
   if ( (following_charcode != 0) && (use_kerning) ) {
@@ -150,20 +156,34 @@ int tt_draw_glyph(true_type_font *font, int x, int y,
   }
   */
 
+  br = red_from_z_rgb_colour(background_colour);
+  bg = green_from_z_rgb_colour(background_colour);
+  bb = blue_from_z_rgb_colour(background_colour);
+
+  dr = red_from_z_rgb_colour(foreground_colour) - br;
+  dg = green_from_z_rgb_colour(foreground_colour) - bg;
+  db = blue_from_z_rgb_colour(foreground_colour) - bb;
+
   start_x = x;
   screen_y = y;
+  TRACE_LOG("Glyph display at %d / %d.\n", x, y);
   for (bitmap_y=0; bitmap_y<bitmap.rows; bitmap_y++, screen_y++) {
     screen_x = start_x;
     for (bitmap_x=0; bitmap_x<bitmap.width; bitmap_x++, screen_x++) {
       pixel = bitmap.buffer[bitmap_y*bitmap.width + bitmap_x];
       if (pixel) {
-        pixel_value = reverse == true ? pixel : 255-pixel;
+        pixel_value = (float)pixel / (float)255;
         screen_pixel_interface->draw_rgb_pixel(
-            screen_y, screen_x, pixel_value, pixel_value, pixel_value);
+            screen_y,
+            screen_x,
+            br + pixel_value * dr,
+            bg + pixel_value * dg,
+            bb + pixel_value * db);
       }
     }
   }
 
+  TRACE_LOG("Glyph advance is %d.\n", advance);
   return advance;
 }
 

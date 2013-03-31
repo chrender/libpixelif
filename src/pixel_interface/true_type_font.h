@@ -55,7 +55,7 @@ int tt_get_glyph_advance(true_type_font *font, z_ucs current_char,
 int tt_draw_glyph(true_type_font *font, int x, int y,
     z_rgb_colour foreground_colour, z_rgb_colour background_colour,
     struct z_screen_pixel_interface *screen_pixel_interface,
-    z_ucs charcode, bool reverse, int *last_gylphs_xcursorpos);
+    z_ucs charcode, int *last_gylphs_xcursorpos);
 void tt_destroy_font(true_type_font *font);
 
 #endif // true_type_font_h_INCLUDED
