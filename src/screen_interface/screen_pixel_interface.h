@@ -75,9 +75,8 @@ struct z_screen_pixel_interface
   void (*redraw_screen_from_scratch)();
   void (*copy_area)(int dsty, int dstx, int srcy, int srcx, int height,
       int width);
-  void (*clear_to_eol)();
   void (*fill_area)(int startx, int starty, int xsize, int ysize,
-      z_colour colour);
+      z_rgb_colour colour);
   void (*set_cursor_visibility)(bool visible);
   z_colour (*get_default_foreground_colour)();
   z_colour (*get_default_background_colour)();
