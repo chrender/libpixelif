@@ -8,7 +8,7 @@ AC_ARG_ENABLE([tracing],
 AC_INIT([libpixelif], [0.1.0])
 
 libpixelif_reqs="freetype2"
-PKG_CHECK_MODULES([libfizmo], [libfizmo >= 0.7.5])
+PKG_CHECK_MODULES([libfizmo], [libfizmo >= 0.7.7])
 m4_include(config-libs.m4)
 
 AC_CONFIG_AUX_DIR([.])

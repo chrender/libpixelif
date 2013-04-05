@@ -66,7 +66,7 @@ static unsigned long read_ft_stream(FT_Stream stream, unsigned long offset,
     unsigned char* buffer, unsigned long count) {
   z_file *fontfile = (z_file*)stream->descriptor.pointer;
   fsi->setfilepos(fontfile, offset, SEEK_SET);
-  return fsi->getchars(buffer, count, fontfile);
+  return fsi->readchars(buffer, count, fontfile);
 }
 
 
