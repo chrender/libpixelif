@@ -184,7 +184,7 @@ int tt_draw_glyph(true_type_font *font, int x, int y,
   }
 
   TRACE_LOG("Glyph advance is %d.\n", advance);
-  return advance;
+  return left_reverse_x + reverse_width;
 }
 
 
