@@ -76,6 +76,7 @@ struct z_window {
   int ycursorpos; // 1 is topmost position
   int xcursorpos; // 1 is leftmost position
   int last_gylphs_xcursorpos; // 1 is leftmost position
+  int rightmost_filled_xpos;
   int leftmargin;
   int rightmargin;
   uint32_t newline_routine;
@@ -229,17 +230,46 @@ static int draw_glyph_string(z_ucs *z_ucs_output, int window_number,
 // false otherwise.
 static bool break_line(int window_number) {
   z_ucs input, event_type;
-  int i;
+  int pixels_to_scroll_up, i;
+
+  TRACE_LOG("Breaking line.\n");
+
+  // Clear the remaining space on the line. This also ensures that the
+  // background color for the line will be the current output_color.
+  printf("right-clear\n");
+  screen_pixel_interface->fill_area(
+      (z_windows[window_number]->xpos
+       + z_windows[window_number]->rightmost_filled_xpos - 1),
+      (z_windows[window_number]->ypos
+       + z_windows[window_number]->ycursorpos),
+      (z_windows[window_number]->xsize
+         - z_windows[window_number]->rightmost_filled_xpos + 1),
+      (line_height),
+      z_to_rgb_colour(z_windows[window_number]->output_background_colour));
+  printf("right-clear-done\n");
 
   z_windows[window_number]->xcursorpos = 1;
   z_windows[window_number]->last_gylphs_xcursorpos = -1;
+  z_windows[window_number]->rightmost_filled_xpos
+    = z_windows[window_number]->xcursorpos;
 
-  if (z_windows[window_number]->ycursorpos + 2*line_height
-      > z_windows[window_number]->ysize - 4) {
-    TRACE_LOG("breaking and scrolling line\n");
-    z_windows[window_number]->ycursorpos
-      = z_windows[window_number]->ysize - line_height - 4;
+  pixels_to_scroll_up
+    = z_windows[window_number]->ycursorpos + 2*line_height + 4
+    - z_windows[window_number]->ysize;
+  printf("pixels to scroll up: %d\n", pixels_to_scroll_up);
 
+  if (pixels_to_scroll_up > 0) {
+    TRACE_LOG("scrolling line up by %d pixels.\n", pixels_to_scroll_up);
+
+    screen_pixel_interface->copy_area(
+        z_windows[window_number]->ypos,
+        z_windows[window_number]->xpos,
+        z_windows[window_number]->ypos + pixels_to_scroll_up,
+        z_windows[window_number]->xpos,
+        z_windows[window_number]->ysize - pixels_to_scroll_up,
+        z_windows[window_number]->xsize);
+
+    /*
     // begin QUARTZ_WM_WORKAROUND
     screen_pixel_interface->fill_area(
         z_windows[window_number]->xpos
@@ -252,22 +282,10 @@ static bool break_line(int window_number) {
         line_height,
         z_to_rgb_colour(z_windows[window_number]->output_background_colour));
     // end ENABLE_QUARTZ_WM_WORKAROUND
+    */
 
-    screen_pixel_interface->copy_area(
-        z_windows[window_number]->ypos,
-        z_windows[window_number]->xpos,
-        z_windows[window_number]->ypos + line_height,
-        z_windows[window_number]->xpos,
-        z_windows[window_number]->ysize - line_height,
-        z_windows[window_number]->xsize);
-
-    screen_pixel_interface->fill_area(
-        z_windows[window_number]->xpos,
-        z_windows[window_number]->ypos
-        + z_windows[window_number]->ysize - line_height,
-        z_windows[window_number]->xsize,
-        line_height,
-        z_to_rgb_colour(z_windows[window_number]->output_background_colour));
+    z_windows[window_number]->ycursorpos
+      += line_height - pixels_to_scroll_up;
   }
   else {
     TRACE_LOG("breaking line\n");
@@ -342,6 +360,14 @@ static bool break_line(int window_number) {
     TRACE_LOG("more prompt finished: %d.\n", event_type);
   }
 
+  // Start new line: Fill right margin with background colour.
+  screen_pixel_interface->fill_area(
+      z_windows[window_number]->xpos,
+      z_windows[window_number]->ypos + z_windows[window_number]->ycursorpos,
+      z_windows[window_number]->leftmargin,
+      line_height,
+      z_to_rgb_colour(z_windows[window_number]->output_background_colour));
+
   return false;
 }
 
@@ -399,15 +425,16 @@ static int draw_glyph(z_ucs charcode, int window_number,
 
   TRACE_LOG("dg: %d: %d,%d\n", window_number, z_windows[window_number]->output_background_colour, z_windows[window_number]->output_foreground_colour);
   //advance = tt_draw_glyph(
-  tt_draw_glyph(
-      font,
-      x,
-      y,
-      reverse == false ? foreground_colour : background_colour,
-      reverse == false ? background_colour : foreground_colour,
-      screen_pixel_interface,
-      charcode,
-      &z_windows[window_number]->last_gylphs_xcursorpos);
+  z_windows[window_number]->rightmost_filled_xpos
+    = tt_draw_glyph(
+        font,
+        x,
+        y,
+        reverse == false ? foreground_colour : background_colour,
+        reverse == false ? background_colour : foreground_colour,
+        screen_pixel_interface,
+        charcode,
+        &z_windows[window_number]->last_gylphs_xcursorpos);
 
   z_windows[window_number]->xcursorpos
     += advance;
@@ -1505,9 +1532,11 @@ static void link_interface_to_story(struct z_story *story) {
     }
 
     z_windows[i]->ycursorpos
-      = (ver >= 5 ? 1 : (z_windows[i]->ysize - line_height));
+      = (ver >= 5 ? 1 : (z_windows[i]->ysize - line_height - 4));
     z_windows[i]->xcursorpos = 1;
     z_windows[i]->last_gylphs_xcursorpos = -1;
+    z_windows[i]->rightmost_filled_xpos
+      = z_windows[i]->xcursorpos;
 
     z_windows[i]->newline_routine = 0;
     z_windows[i]->interrupt_countdown = 0;
@@ -1692,6 +1721,8 @@ static void split_window(int16_t nof_lines) {
       if (z_windows[0]->ycursorpos < 1) {
         z_windows[0]->xcursorpos = 1;
         z_windows[0]->last_gylphs_xcursorpos = -1;
+        z_windows[0]->rightmost_filled_xpos
+          = z_windows[0]->xcursorpos;
         z_windows[0]->ycursorpos = 1;
         TRACE_LOG("Re-adjusting cursor for lower window.\n");
       }
@@ -1699,6 +1730,8 @@ static void split_window(int16_t nof_lines) {
       if (z_windows[1]->ycursorpos > z_windows[1]->ysize) {
         z_windows[1]->xcursorpos = 1;
         z_windows[1]->last_gylphs_xcursorpos = -1;
+        z_windows[1]->rightmost_filled_xpos
+          = z_windows[1]->xcursorpos;
         z_windows[1]->ycursorpos = 1;
         TRACE_LOG("Re-adjusting cursor for upper window.\n");
       }
@@ -1747,6 +1780,8 @@ static void erase_window(int16_t window_number) {
       = 1 + z_windows[window_number]->leftmargin;
     z_windows[window_number]->last_gylphs_xcursorpos
       = -1;
+    z_windows[window_number]->rightmost_filled_xpos
+      = z_windows[window_number]->xcursorpos;
     z_windows[window_number]->ycursorpos
       = (ver >= 5 ? 1 : (z_windows[window_number]->ysize - line_height));
 
@@ -2023,6 +2058,8 @@ static void refresh_input_line(bool display_cursor) {
   z_windows[0]->xcursorpos = *current_input_x - z_windows[0]->xpos
     - z_windows[0]->leftmargin;
   z_windows[0]->last_gylphs_xcursorpos = -1;
+  z_windows[0]->rightmost_filled_xpos
+    = z_windows[0]->xcursorpos;
   TRACE_LOG("xpos: %d, leftm:%d, xcurpos:%d\n",
       z_windows[0]->xpos,
       z_windows[0]->leftmargin,
@@ -2674,7 +2711,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
 
   TRACE_LOG("Flush finished.\n");
 
-  timeout_millis = (is_timed_keyboard_input_available() == true ? 100 : 0);
+  //timeout_millis = (is_timed_keyboard_input_available() == true ? 100 : 0);
 
   TRACE_LOG("1/10s: %d, routine: %d.\n",
       tenth_seconds, verification_routine);
@@ -2819,9 +2856,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
 
     destroy_history_output(history);
   }
-    */
-
-
+  */
 
   TRACE_LOG("xpos:%d\n", z_windows[active_z_window_id]->xcursorpos);
 
@@ -2829,7 +2864,6 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
   nof_input_lines = 1;
   refresh_input_line(true);
   screen_pixel_interface->update_screen();
-
 
   while (input_in_progress == true) {
     event_type = screen_pixel_interface->get_next_event(&input, timeout_millis);
@@ -3274,8 +3308,6 @@ static int read_char(uint16_t tenth_seconds, uint32_t verification_routine,
   else
     timed_input_active = false;
 
-
-
   while (input_in_progress == true)
   {
     event_type = screen_pixel_interface->get_next_event(&input, timeout_millis);
@@ -3405,6 +3437,8 @@ static void show_status(z_ucs *room_description, int status_line_mode,
     z_windows[statusline_window_id]->ycursorpos = 1;
     z_windows[statusline_window_id]->xcursorpos = 1;
     z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
+    z_windows[statusline_window_id]->rightmost_filled_xpos
+      = z_windows[statusline_window_id]->xcursorpos;
 
     last_active_z_window_id = active_z_window_id;
     switch_to_window(statusline_window_id);
@@ -3427,12 +3461,16 @@ static void show_status(z_ucs *room_description, int status_line_mode,
 
       z_windows[statusline_window_id]->xcursorpos = 2;
       z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
+      z_windows[statusline_window_id]->rightmost_filled_xpos
+        = z_windows[statusline_window_id]->xcursorpos;
       //refresh_cursor(statusline_window_id);
       z_ucs_output(room_description);
 
       z_windows[statusline_window_id]->xcursorpos
         = z_windows[statusline_window_id]->xsize - rightside_length + 1;
       z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
+      z_windows[statusline_window_id]->rightmost_filled_xpos
+        = z_windows[statusline_window_id]->xcursorpos;
       //refresh_cursor(statusline_window_id);
 
       ptr = z_ucs_cpy(rightside_buf_zucs, libpixelif_score_string);
@@ -3458,12 +3496,16 @@ static void show_status(z_ucs *room_description, int status_line_mode,
 
       z_windows[statusline_window_id]->xcursorpos = 2;
       z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
+      z_windows[statusline_window_id]->rightmost_filled_xpos
+        = z_windows[statusline_window_id]->xcursorpos;
       //refresh_cursor(statusline_window_id);
       z_ucs_output(room_description);
 
       z_windows[statusline_window_id]->xcursorpos
         = z_windows[statusline_window_id]->xsize - 100;
       z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
+      z_windows[statusline_window_id]->rightmost_filled_xpos
+        = z_windows[statusline_window_id]->xcursorpos;
       //refresh_cursor(statusline_window_id);
 
       sprintf(latin1_buf, "%02d:%02d", parameter1, parameter2);
@@ -3487,6 +3529,8 @@ static void set_window(int16_t window_number) {
       z_windows[1]->ycursorpos = 1;
       z_windows[1]->xcursorpos = 1;
       z_windows[1]->last_gylphs_xcursorpos = -1;
+      z_windows[1]->rightmost_filled_xpos
+        = z_windows[1]->xcursorpos;
     }
 
     switch_to_window(window_number);
@@ -3532,6 +3576,8 @@ static void set_cursor(int16_t line, int16_t column, int16_t window_number) {
       : column;
 
     z_windows[window_number]->last_gylphs_xcursorpos = -1;
+    z_windows[window_number]->rightmost_filled_xpos
+      = z_windows[window_number]->xcursorpos;
 
     //refresh_cursor(window_number);
   }
