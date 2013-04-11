@@ -2884,6 +2884,9 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
           current_tenth_seconds = 0;
           stream_output_has_occured = false;
 
+          // Remove cursor:
+          refresh_input_line(false);
+
           TRACE_LOG("calling timed-input-routine at %x.\n",
               verification_routine);
           timed_routine_retval = interpret_from_call(verification_routine);
@@ -2897,7 +2900,6 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
           else {
             if (stream_output_has_occured == true) {
               flush_all_buffered_windows();
-              refresh_input_line(true);
               /*
               z_windows[active_z_window_id]->xcursorpos
                 = *current_input_size > *current_input_display_width
@@ -2905,12 +2907,16 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
                 : *current_input_x + *current_input_size;
               */
               z_windows[active_z_window_id]->last_gylphs_xcursorpos = -1;
-              screen_pixel_interface->update_screen();
             }
 
             if (timed_routine_retval != 0) {
               input_in_progress = false;
               input_size = 0;
+            }
+            else {
+              // Re-display cursor.
+              refresh_input_line(true);
+              screen_pixel_interface->update_screen();
             }
           }
         }
