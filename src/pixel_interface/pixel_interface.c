@@ -77,6 +77,7 @@ struct z_window {
   int xcursorpos; // 1 is leftmost position
   int last_gylphs_xcursorpos; // 1 is leftmost position
   int rightmost_filled_xpos;
+  int lower_padding;
   int leftmargin;
   int rightmargin;
   uint32_t newline_routine;
@@ -130,11 +131,11 @@ static z_ucs *libpixelif_score_string;
 static z_ucs *libpixelif_turns_string;
 static int libpixelif_right_status_min_size;
 static int active_z_window_id = -1;
-static true_type_wordwrapper *refresh_wordwrapper;
-static int refresh_newline_counter;
-static bool refresh_count_mode;
-static int refresh_lines_to_skip;
-static int refresh_lines_to_output;
+//static true_type_wordwrapper *refresh_wordwrapper;
+//static int refresh_newline_counter;
+//static bool refresh_count_mode;
+//static int refresh_lines_to_skip;
+//static int refresh_lines_to_output;
 static int last_split_window_size = 0;
 static bool winch_found = false;
 static bool interface_open = false;
@@ -187,6 +188,7 @@ static struct z_screen_pixel_interface *screen_pixel_interface = NULL;
 //static int *current_input_size;
 static int *current_input_x, *current_input_y;
 //static int *current_input_display_width;
+static int nof_break_line_invocations = 0;
 
 static char last_left_margin_config_value_as_string[MAX_MARGIN_AS_STRING_LEN];
 static char last_right_margin_config_value_as_string[MAX_MARGIN_AS_STRING_LEN];
@@ -201,6 +203,8 @@ static char *fixed_bold_italic_font_filename = NULL;
 static char *font_search_path = FONT_DEFAULT_SEARCH_PATH;
 static int font_height_in_pixel = 14;
 static char last_font_size_config_value_as_string[MAX_VALUE_AS_STRING_LEN];
+
+//static z_ucs newline_string[] = { Z_UCS_NEWLINE, 0 };
 
 static char *config_option_names[] = {
   "left-margin", "right-margin", "disable-hyphenation", "disable-color",
@@ -226,17 +230,16 @@ static void refresh_cursor(int UNUSED(window_id)) {
 static int draw_glyph_string(z_ucs *z_ucs_output, int window_number,
     true_type_font *font);
 
-// Will return true in case winch event was encountered during "more" prompt,
-// false otherwise.
-static bool break_line(int window_number) {
-  z_ucs input, event_type;
-  int pixels_to_scroll_up, i;
 
-  TRACE_LOG("Breaking line.\n");
-
+static void clear_to_eol(int window_number) {
   // Clear the remaining space on the line. This also ensures that the
   // background color for the line will be the current output_color.
-  printf("right-clear\n");
+
+  /*
+  printf("finalize: %d.\n", z_windows[window_number]->xpos
+        + z_windows[window_number]->rightmost_filled_xpos - 1);
+  */
+
   screen_pixel_interface->fill_area(
       (z_windows[window_number]->xpos
        + z_windows[window_number]->rightmost_filled_xpos - 1),
@@ -246,7 +249,24 @@ static bool break_line(int window_number) {
          - z_windows[window_number]->rightmost_filled_xpos + 1),
       (line_height),
       z_to_rgb_colour(z_windows[window_number]->output_background_colour));
-  printf("right-clear-done\n");
+}
+
+
+static void flush_window(int window_number) {
+  freetype_wordwrap_flush_output(z_windows[window_number]->wordwrapper);
+  clear_to_eol(window_number);
+}
+
+
+// Will return true in case winch event was encountered during "more" prompt,
+// false otherwise.
+static bool break_line(int window_number) {
+  z_ucs input, event_type;
+  int pixels_to_scroll_up, i;
+
+  TRACE_LOG("Breaking line.\n");
+
+  clear_to_eol(window_number);
 
   z_windows[window_number]->xcursorpos = 1;
   z_windows[window_number]->last_gylphs_xcursorpos = -1;
@@ -254,19 +274,32 @@ static bool break_line(int window_number) {
     = z_windows[window_number]->xcursorpos;
 
   pixels_to_scroll_up
-    = z_windows[window_number]->ycursorpos + 2*line_height + 4
+    = z_windows[window_number]->ycursorpos + 2*line_height
+    + z_windows[window_number]->lower_padding
     - z_windows[window_number]->ysize;
-  printf("pixels to scroll up: %d\n", pixels_to_scroll_up);
+  //printf("pixels to scroll up: %d\n", pixels_to_scroll_up);
 
   if (pixels_to_scroll_up > 0) {
     TRACE_LOG("scrolling line up by %d pixels.\n", pixels_to_scroll_up);
+
+    /*
+    printf("copy-area: %d/%d to %d/%d, %d x %d\n",
+        z_windows[window_number]->ypos + pixels_to_scroll_up,
+        z_windows[window_number]->xpos,
+        z_windows[window_number]->ypos,
+        z_windows[window_number]->xpos,
+        z_windows[window_number]->xsize,
+        z_windows[window_number]->ysize - pixels_to_scroll_up
+        - z_windows[window_number]->lower_padding);
+    */
 
     screen_pixel_interface->copy_area(
         z_windows[window_number]->ypos,
         z_windows[window_number]->xpos,
         z_windows[window_number]->ypos + pixels_to_scroll_up,
         z_windows[window_number]->xpos,
-        z_windows[window_number]->ysize - pixels_to_scroll_up,
+        z_windows[window_number]->ysize - pixels_to_scroll_up
+        - z_windows[window_number]->lower_padding,
         z_windows[window_number]->xsize);
 
     /*
@@ -285,7 +318,8 @@ static bool break_line(int window_number) {
     */
 
     z_windows[window_number]->ycursorpos
-      += line_height - pixels_to_scroll_up;
+      = z_windows[window_number]->ysize - line_height
+      - z_windows[window_number]->lower_padding;
   }
   else {
     TRACE_LOG("breaking line\n");
@@ -293,6 +327,7 @@ static bool break_line(int window_number) {
   }
   TRACE_LOG("new y-cursorpos: %d\n", z_windows[window_number]->ycursorpos);
 
+  nof_break_line_invocations++;
   z_windows[window_number]->nof_consecutive_lines_output++;
 
   TRACE_LOG("consecutive lines: %d.\n",
@@ -310,7 +345,7 @@ static bool break_line(int window_number) {
     for (i=0; i<nof_active_z_windows; i++)
       if ( (i != window_number)
           && (bool_equal(z_windows[i]->buffering, true))) {
-        freetype_wordwrap_flush_output(z_windows[i]->wordwrapper);
+        flush_window(i);
       }
 
 
@@ -447,6 +482,17 @@ static int draw_glyph_string(z_ucs *z_ucs_output, int window_number,
     true_type_font *font) {
   int result = 0;
 
+  /*
+  int i = 0;
+  printf("--- (at y:%d, x:%d)\n", z_windows[window_number]->ycursorpos,
+      z_windows[window_number]->xcursorpos);
+  while (z_ucs_output[i]) {
+    printf("%c", z_ucs_output[i]);
+    i++;
+  }
+  printf("\n---\n");
+  */
+
   while (*z_ucs_output) {
     result += draw_glyph(*z_ucs_output, window_number, font);
     z_ucs_output++;
@@ -571,7 +617,7 @@ static void flush_all_buffered_windows() {
 
   for (i=0; i<nof_active_z_windows; i++)
     if (bool_equal(z_windows[i]->buffering, true))
-      freetype_wordwrap_flush_output(z_windows[i]->wordwrapper);
+      flush_window(i);
 }
 
 
@@ -768,7 +814,7 @@ void z_ucs_output_window_target(z_ucs *z_ucs_output,
                 &&
                 (bool_equal(z_windows[i]->buffering, true))
                )
-              freetype_wordwrap_flush_output(z_windows[i]->wordwrapper);
+              flush_window(i);
 
           screen_pixel_interface->z_ucs_output(libpixelif_more_prompt);
           screen_pixel_interface->update_screen();
@@ -817,6 +863,7 @@ void z_ucs_output_window_target(z_ucs *z_ucs_output,
 }
 
 
+/*
 static void z_ucs_output_refresh_destination(z_ucs *z_ucs_output,
     void *UNUSED(window_number_as_void)) {
   z_ucs *output_end;
@@ -914,6 +961,7 @@ static void z_ucs_output_refresh_destination(z_ucs *z_ucs_output,
     }
   }
 }
+*/
 
 
 static char* get_interface_name() {
@@ -1224,7 +1272,6 @@ static char **get_config_option_names() {
 
 
 static void z_ucs_output(z_ucs *z_ucs_output) {
-
   TRACE_LOG("Output: \"");
   TRACE_LOG_Z_UCS(z_ucs_output);
   TRACE_LOG("\" to window %d, buffering: %d.\n",
@@ -1286,31 +1333,16 @@ static void z_ucs_output(z_ucs *z_ucs_output) {
     }
   }
 
-  /*
-  if (active_z_window_id == -1) {
-    draw_glyph_string(
+  if (bool_equal(z_windows[active_z_window_id]->buffering, false)) {
+    z_ucs_output_window_target(
         z_ucs_output,
-        active_z_window_id,
-        z_windows[active_z_window_id]->output_true_type_font);
+        (void*)(&z_windows[active_z_window_id]->window_number));
   }
   else {
-    */
-    if (bool_equal(z_windows[active_z_window_id]->buffering, false)) {
-      /*
-      z_ucs_output_window_target(
-          z_ucs_output,
-          (void*)(&z_windows[active_z_window_id]->window_number));
-      */
-      draw_glyph_string(
-          z_ucs_output,
-          active_z_window_id,
-          z_windows[active_z_window_id]->output_true_type_font);
-    }
-    else {
-      freetype_wrap_z_ucs(
+    freetype_wrap_z_ucs(
         z_windows[active_z_window_id]->wordwrapper, z_ucs_output);
-    }
-  //}
+  }
+
   TRACE_LOG("z_ucs_output finished.\n");
 }
 
@@ -1537,6 +1569,7 @@ static void link_interface_to_story(struct z_story *story) {
     z_windows[i]->last_gylphs_xcursorpos = -1;
     z_windows[i]->rightmost_filled_xpos
       = z_windows[i]->xcursorpos;
+    z_windows[i]->lower_padding = 4;
 
     z_windows[i]->newline_routine = 0;
     z_windows[i]->interrupt_countdown = 0;
@@ -1565,12 +1598,14 @@ static void link_interface_to_story(struct z_story *story) {
 
   active_z_window_id = 0;
 
+  /*
   refresh_wordwrapper = create_true_type_wordwrapper(
       regular_font,
       z_windows[0]->xsize-z_windows[0]->leftmargin-z_windows[0]->rightmargin,
       &z_ucs_output_refresh_destination,
       NULL,
       hyphenation_enabled);
+  */
 
   // First, set default colors for the screen, then clear it to correctly
   // initialize everything with the desired colors.
@@ -1658,7 +1693,7 @@ static int pixel_close_interface(z_ucs *error_message) {
         libpixelif_module_name,
         i18n_libpixelif_PRESS_ANY_KEY_TO_QUIT);
     streams_latin1_output("]");
-    freetype_wordwrap_flush_output(z_windows[active_z_window_id]->wordwrapper);
+    flush_window(active_z_window_id);
     screen_pixel_interface->update_screen();
 
     do
@@ -1682,7 +1717,7 @@ static void set_buffer_mode(uint8_t new_buffer_mode) {
   if (new_buffer_mode == 0) {
     // In case buffering is not desired we might have to flush the buffer.
     if (z_windows[0]->buffering == true) {
-      freetype_wordwrap_flush_output(z_windows[0]->wordwrapper);
+      flush_window(0);
     }
     z_windows[0]->buffering = false;
   }
@@ -1711,7 +1746,7 @@ static void split_window(int16_t nof_lines) {
       TRACE_LOG("delta %d\n", lines_delta);
 
       if (bool_equal(z_windows[0]->buffering, true))
-        freetype_wordwrap_flush_output(z_windows[0]->wordwrapper);
+        flush_window(0);
 
       z_windows[0]->ysize -= lines_delta;
       z_windows[0]->ycursorpos -= lines_delta;
@@ -1767,7 +1802,7 @@ static void erase_window(int16_t window_number) {
     // operation should happen at the start of a game (Z-Spec 8.7.3.3).
 
     if (bool_equal(z_windows[window_number]->buffering, true))
-      freetype_wordwrap_flush_output(z_windows[window_number]->wordwrapper);
+      flush_window(window_number);
 
     screen_pixel_interface->fill_area(
         z_windows[window_number]->xpos,
@@ -1793,6 +1828,7 @@ static void erase_window(int16_t window_number) {
 static void set_text_style(z_style text_style) {
   int i;
 
+  //printf("New text style is %d.\n", text_style);
   TRACE_LOG("New text style is %d.\n", text_style);
 
   for (i=0; i<nof_active_z_windows; i++) {
@@ -1993,6 +2029,7 @@ static history_output_target history_target =
 };
 */
 
+
 static history_output_target history_target =
 {
   &set_text_style,
@@ -2108,6 +2145,8 @@ static void refresh_input_line(bool display_cursor) {
 
 static void refresh_screen() {
   int last_active_z_window_id = -1;
+  int y_height_to_fill;
+  int saved_padding, last_output_height, nof_paragraphs_to_repeat;
 
   if (active_z_window_id != 0) {
     last_active_z_window_id = active_z_window_id;
@@ -2120,13 +2159,6 @@ static void refresh_screen() {
   //screen_pixel_interface->set_text_style(0);
   erase_window(0);
 
-  // First, we'll directory refresh the input line, although we have
-  // to do that later again to get the prompt in order. This is neccessary
-  // however to re-evaluate the current number of input lines for the
-  // new screen size.
-  nof_input_lines = 0;
-  refresh_input_line(true);
-
   // The "refresh_input_line" function has now re-evaluated the variable
   // "nof_input_lines". We now have to restore all the non-full input
   // lines (nof_input_lines - 1).
@@ -2136,17 +2168,79 @@ static void refresh_screen() {
 
   disable_more_prompt = false;
 
-  z_windows[0]->ycursorpos
-    = z_windows[0]->ysize - (nof_input_lines + 1) * line_height - 4;
-  z_windows[0]->xcursorpos
-    = z_windows[0]->leftmargin + 1;
-
   if ((history = init_history_output(outputhistory[0], &history_target))
       == NULL)
     return;
   TRACE_LOG("History: %p\n", history);
 
-  refresh_input_line(true);
+  if ((history = init_history_output(outputhistory[0],&history_target)) == NULL)
+    return;
+
+  y_height_to_fill = z_windows[0]->ysize - z_windows[0]->lower_padding;
+  saved_padding = z_windows[0]->lower_padding;
+  while (output_rewind_paragraph(history) == 0) {
+    if (y_height_to_fill < 1)
+      break;
+
+    nof_paragraphs_to_repeat = 1;
+    if (y_height_to_fill < line_height) {
+      // At this point we know we've got to refresh a partial line. To
+      // make this easy, we'll simply repeat the last iteration, but
+      // request 2 paragraphs for output, so scrolling will take care
+      // of this.
+
+      y_height_to_fill += last_output_height;
+      nof_paragraphs_to_repeat = 2;
+    }
+
+    z_windows[0]->xcursorpos = 1;
+    z_windows[0]->rightmost_filled_xpos = z_windows[0]->xcursorpos;
+    z_windows[0]->ycursorpos = y_height_to_fill - line_height;
+    z_windows[0]->lower_padding =
+      z_windows[0]->ysize - y_height_to_fill;
+
+    if (nof_paragraphs_to_repeat == 2) {
+      // Since we're now overwriting we'll have to erase at least the
+      // current line we're writing to -- scrolling will take case of
+      // the rest above.
+      clear_to_eol(0);
+    }
+
+    /*
+       printf("start: y_height_to_fill: %d, cursorpos: %d, pad: %d\n",
+       y_height_to_fill, z_windows[0]->ycursorpos,
+       z_windows[0]->lower_padding);
+       */
+
+    //printf("Start paragraph repetition.\n");
+    nof_break_line_invocations = 0;
+    output_repeat_paragraphs(history, nof_paragraphs_to_repeat, true, false);
+    flush_window(0);
+    clear_to_eol(0);
+    freetype_wordwrap_reset_position(z_windows[0]->wordwrapper);
+    //printf("End paragraph repetition.\n");
+    last_output_height = (nof_break_line_invocations + 1) * line_height;
+    y_height_to_fill -= last_output_height;
+    z_windows[0]->ycursorpos = y_height_to_fill - line_height;
+
+    /*
+       printf("end: %d breaks, y_height_to_fill: %d, cursorpos: %d, pad: %d\n",
+       nof_break_line_invocations, y_height_to_fill,
+       z_windows[0]->ycursorpos,
+       z_windows[0]->lower_padding);
+       */
+  }
+  //printf("done, y_height_to_fill is %d.\n", y_height_to_fill);
+  destroy_history_output(history);
+  z_windows[0]->lower_padding = saved_padding;
+  z_windows[0]->ycursorpos
+    = z_windows[0]->ysize - (nof_input_lines) * line_height
+    - z_windows[0]->lower_padding;
+  //flush_all_buffered_windows();
+  if (input_line_on_screen == true) {
+    *current_input_y = z_windows[0]->ycursorpos;
+    refresh_input_line(true);
+  }
   screen_pixel_interface->update_screen();
 
   /*
@@ -3546,7 +3640,7 @@ static void set_window(int16_t window_number) {
 
 static void set_cursor(int16_t line, int16_t column, int16_t window_number) {
   if (bool_equal(z_windows[window_number]->buffering, true))
-    freetype_wordwrap_flush_output(z_windows[window_number]->wordwrapper);
+    flush_window(window_number);
 
   if (column < 0)
     return;
@@ -3787,8 +3881,9 @@ void new_pixel_screen_size(int newysize, int newxsize) {
     }
 
     if (z_windows[i]->ycursorpos + 2*line_height
-        > z_windows[i]->ysize - 4) {
-      z_windows[i]->ycursorpos = z_windows[i]->ysize - line_height - 4;
+        > z_windows[i]->ysize - z_windows[i]->lower_padding) {
+      z_windows[i]->ycursorpos
+        = z_windows[i]->ysize - line_height - z_windows[i]->lower_padding;
       TRACE_LOG("new ycursorpos[%d]: %d\n", i, z_windows[i]->ycursorpos);
     }
 
@@ -3812,7 +3907,8 @@ void new_pixel_screen_size(int newysize, int newxsize) {
     // If the screen is redrawn, the screen contents are always aligned
     // to the bottom so we also have to move the input line downward.
     *current_input_y
-      = z_windows[0]->ypos + z_windows[0]->ysize - line_height - 4;
+      = z_windows[0]->ypos + z_windows[0]->ysize - line_height
+      - z_windows[0]->lower_padding;
 
     //TRACE_LOG("current_input_display_width: %d\n",
     // *current_input_display_width);

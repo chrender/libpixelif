@@ -76,6 +76,7 @@ void freetype_wordwrap_insert_metadata(true_type_wordwrapper *wrapper,
     void *ptr_parameter, uint32_t int_parameter, true_type_font *new_font);
 void freetype_wordwrap_adjust_line_length(true_type_wordwrapper *wrapper,
     size_t new_line_length);
+void freetype_wordwrap_reset_position(true_type_wordwrapper *wrapper);
 
 #endif // true_type_wordwrapper_h_INCLUDED
 

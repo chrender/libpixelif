@@ -66,6 +66,13 @@ static void set_font(true_type_wordwrapper *wrapper, true_type_font *new_font) {
 }
 
 
+void freetype_wordwrap_reset_position(true_type_wordwrapper *wrapper) {
+  wrapper->last_word_end_index = -1;
+  wrapper->last_word_end_advance_position = 0;
+  wrapper->current_advance_position = 0;
+}
+
+
 true_type_wordwrapper *create_true_type_wordwrapper(true_type_font *font,
     int line_length,
     void (*wrapped_text_output_destination)(z_ucs *output, void *parameter),
@@ -76,9 +83,7 @@ true_type_wordwrapper *create_true_type_wordwrapper(true_type_font *font,
   result->input_buffer = NULL;
   result->input_buffer_size = 0;
   result->current_buffer_index = 0;
-  result->last_word_end_index = -1;
-  result->last_word_end_advance_position = 0;
-  result->current_advance_position = 0;
+  freetype_wordwrap_reset_position(result);
   result->wrapped_text_output_destination = wrapped_text_output_destination;
   result->destination_parameter = destination_parameter;
   result->enable_hyphenation = hyphenation_enabled;
@@ -249,11 +254,79 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
 }
 
 
+static void process_line_end(true_type_wordwrapper *wrapper,
+    z_ucs current_char, z_ucs last_char) {
+  z_ucs buf_1;
+  long flush_index;
+
+  TRACE_LOG("lwei: %ld / lweap: %ld / ll: %d\n",
+      wrapper->last_word_end_index,
+      wrapper->last_word_end_advance_position,
+      wrapper->line_length);
+
+  if (wrapper->current_advance_position > wrapper->line_length) {
+    TRACE_LOG("Behind past line, match on space|newline, breaking.\n");
+    // In case we exceed the right margin, we have to break the line
+    // before the last word.
+
+    if (wrapper->last_word_end_index < 0) {
+      TRACE_LOG("break at %ld, 1\n", wrapper->current_buffer_index);
+      // If the current line does not contain a single word end, we'll
+      // have to break at the middle of the word.
+      flush_index = wrapper->current_buffer_index;
+      buf_1 = wrapper->input_buffer[flush_index];
+      wrapper->input_buffer[flush_index] = Z_UCS_NEWLINE;
+      flush_line(wrapper, flush_index);
+      wrapper->input_buffer[flush_index] = buf_1;
+      wrapper->current_advance_position = 0;
+    }
+    else {
+      // Otherwise, we simply break after the last word.
+      TRACE_LOG("break at %ld, 2\n", wrapper->last_word_end_index + 1);
+      flush_index = wrapper->last_word_end_index;
+
+      wrapper->input_buffer[flush_index] = Z_UCS_NEWLINE;
+      flush_line(wrapper, flush_index);
+
+      wrapper->current_advance_position
+        -= wrapper->last_word_end_advance_position;
+
+      wrapper->last_word_end_advance_position
+        = wrapper->current_advance_position;
+
+      wrapper->last_word_end_index
+        = wrapper->current_buffer_index;
+    }
+  }
+
+  if (current_char == Z_UCS_NEWLINE) {
+    TRACE_LOG("Flushing on newline at current position.\n");
+    // In case everything fits into the current line and the current
+    // char is a newline, we can simply flush at the current position.
+    flush_line(
+        wrapper,
+        wrapper->current_buffer_index - 1);
+
+    wrapper->last_word_end_advance_position = 0;
+    wrapper->current_advance_position = 0;
+    wrapper->last_word_end_index = -1;
+  }
+  else if ( (current_char == Z_UCS_SPACE) && (last_char != Z_UCS_SPACE) ) {
+    // If we're not past the right margin and the current char is not
+    // a newline, we've encountered a space and a word end.
+    TRACE_LOG("lweap-at-space: %ld\n",
+        wrapper->last_word_end_advance_position);
+    wrapper->last_word_end_advance_position
+      = wrapper->current_advance_position;
+    wrapper->last_word_end_index
+      = wrapper->current_buffer_index - 1;
+  }
+}
+
+
 void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
   z_ucs *input_index = input;
   z_ucs current_char, last_char; //, char_before_last_char;
-  z_ucs buf_1;
-  long flush_index;
 
   // In order to build an algorithm most suitable to both enabled and
   // disabled hyphenation, we'll collect input until we'll find the first
@@ -306,69 +379,7 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
     // In case we're hitting a space or newline we have to evaluate whether
     // we're now at a position behind the right margin.
     if ((current_char == Z_UCS_SPACE) || (current_char == Z_UCS_NEWLINE)) {
-      // We'll check whether things fit in to the current line.
-      TRACE_LOG("lwei: %ld / lweap: %ld / ll: %d\n",
-          wrapper->last_word_end_index,
-          wrapper->last_word_end_advance_position,
-          wrapper->line_length);
-
-      if (wrapper->current_advance_position > wrapper->line_length) {
-        TRACE_LOG("Behind past line, match on space|newline, breaking.\n");
-        // In case we exceed the right margin, we have to break the line
-        // before the last word.
-
-        if (wrapper->last_word_end_index < 0) {
-          TRACE_LOG("break at %ld, 1\n", wrapper->current_buffer_index);
-          // If the current line does not contain a single word end, we'll
-          // have to break at the middle of the word.
-          flush_index = wrapper->current_buffer_index;
-          buf_1 = wrapper->input_buffer[flush_index];
-          wrapper->input_buffer[flush_index] = Z_UCS_NEWLINE;
-          flush_line(wrapper, flush_index);
-          wrapper->input_buffer[flush_index] = buf_1;
-          wrapper->current_advance_position = 0;
-        }
-        else {
-          // Otherwise, we simply break after the last word.
-          TRACE_LOG("break at %ld, 2\n", wrapper->last_word_end_index + 1);
-          flush_index = wrapper->last_word_end_index;
-
-          wrapper->input_buffer[flush_index] = Z_UCS_NEWLINE;
-          flush_line(wrapper, flush_index);
-
-          wrapper->current_advance_position
-            -= wrapper->last_word_end_advance_position;
-
-          wrapper->last_word_end_advance_position
-            = wrapper->current_advance_position;
-
-          wrapper->last_word_end_index
-            = wrapper->current_buffer_index;
-        }
-      }
-
-      if (current_char == Z_UCS_NEWLINE) {
-        TRACE_LOG("Flushing on newline at current position.\n");
-        // In case everything fits into the current line and the current
-        // char is a newline, we can simply flush at the current position.
-        flush_line(
-            wrapper,
-            wrapper->current_buffer_index - 1);
-
-        wrapper->last_word_end_advance_position = 0;
-        wrapper->current_advance_position = 0;
-        wrapper->last_word_end_index = -1;
-      }
-      else if ( (current_char == Z_UCS_SPACE) && (last_char != Z_UCS_SPACE) ) {
-        // If we're not past the right margin and the current char is not
-        // a newline, we've encountered a space and a word end.
-        TRACE_LOG("lweap-at-space: %ld\n",
-            wrapper->last_word_end_advance_position);
-        wrapper->last_word_end_advance_position
-          = wrapper->current_advance_position;
-        wrapper->last_word_end_index
-          = wrapper->current_buffer_index - 1;
-      }
+      process_line_end(wrapper, current_char, last_char);
     }
 
     input_index++;
@@ -378,7 +389,8 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
 
 
 void freetype_wordwrap_flush_output(true_type_wordwrapper* wrapper) {
-  flush_line(wrapper, -1);
+  //flush_line(wrapper, -1);
+  process_line_end(wrapper, Z_UCS_NEWLINE, 0);
 }
 
 
@@ -441,4 +453,3 @@ void freetype_wordwrap_adjust_line_length(true_type_wordwrapper *wrapper,
       new_line_length);
   wrapper->line_length = new_line_length;
 }
-
