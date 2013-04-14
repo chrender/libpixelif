@@ -2090,6 +2090,8 @@ static void refresh_input_line(bool display_cursor) {
     switch_to_window(0);
   }
 
+  printf("refresh: curx:%d, cury:%d\n", 
+      *current_input_x, *current_input_y);
   TRACE_LOG("refresh: curx:%d, cury:%d\n", 
       *current_input_x, *current_input_y);
   z_windows[0]->xcursorpos = *current_input_x - z_windows[0]->xpos
@@ -2158,10 +2160,6 @@ static void refresh_screen() {
       screen_width_in_pixel, screen_height_in_pixel);
   //screen_pixel_interface->set_text_style(0);
   erase_window(0);
-
-  // The "refresh_input_line" function has now re-evaluated the variable
-  // "nof_input_lines". We now have to restore all the non-full input
-  // lines (nof_input_lines - 1).
 
   if (last_active_z_window_id != -1)
     switch_to_window(last_active_z_window_id);
@@ -2233,12 +2231,17 @@ static void refresh_screen() {
   //printf("done, y_height_to_fill is %d.\n", y_height_to_fill);
   destroy_history_output(history);
   z_windows[0]->lower_padding = saved_padding;
+  /*
+  printf(":: %d, %d. %d, %d\n",
+      z_windows[0]->ysize, nof_input_lines, line_height,
+    z_windows[0]->lower_padding);
+  */
   z_windows[0]->ycursorpos
     = z_windows[0]->ysize - (nof_input_lines) * line_height
     - z_windows[0]->lower_padding;
   //flush_all_buffered_windows();
   if (input_line_on_screen == true) {
-    *current_input_y = z_windows[0]->ycursorpos;
+    *current_input_y = z_windows[0]->ypos + z_windows[0]->ycursorpos;
     refresh_input_line(true);
   }
   screen_pixel_interface->update_screen();
@@ -3891,18 +3894,13 @@ void new_pixel_screen_size(int newysize, int newxsize) {
       z_windows[i]->xcursorpos = z_windows[i]->xsize;
   }
 
+  /*
   if (input_line_on_screen == true) {
     TRACE_LOG("input-x-before: %d\n", *current_input_x);
     TRACE_LOG("input-y-before: %d\n", *current_input_y);
     //TRACE_LOG("current_input_display_width: %d\n",
-    //*current_input_display_width);
     TRACE_LOG("%d/%d/%d y:%d,%d\n", z_windows[0]->xpos, z_windows[0]->xsize,
         *current_input_x, z_windows[0]->ypos, z_windows[0]->ysize);
-
-    /*
-    *current_input_display_width
-      = z_windows[0]->xpos + z_windows[0]->xsize - *current_input_x;
-      */
 
     // If the screen is redrawn, the screen contents are always aligned
     // to the bottom so we also have to move the input line downward.
@@ -3916,6 +3914,7 @@ void new_pixel_screen_size(int newysize, int newxsize) {
     TRACE_LOG("input-x-after: %d\n", *current_input_x);
     TRACE_LOG("input-y-after: %d\n", *current_input_y);
   }
+  */
 
   //wordwrap_output_left_padding(z_windows[i]->wordwrapper);
   refresh_screen();
