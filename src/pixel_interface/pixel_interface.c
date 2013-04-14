@@ -2078,8 +2078,30 @@ static void draw_cursor() {
 }
 
 
-static void refresh_input_line(bool display_cursor) {
+static void clear_input_line() {
   int i;
+
+  // Fill first input line.
+  screen_pixel_interface->fill_area(
+      *current_input_x,
+      *current_input_y,
+      z_windows[0]->xsize - z_windows[0]->rightmargin - *current_input_x + 2,
+      line_height,
+      z_to_rgb_colour(z_windows[0]->output_background_colour));
+
+  for (i=1; i<nof_input_lines; i++) {
+    screen_pixel_interface->fill_area(
+        z_windows[0]->xpos + z_windows[0]->leftmargin,
+        *current_input_y + i*line_height,
+        z_windows[0]->xsize - z_windows[0]->leftmargin
+        - z_windows[0]->rightmargin,
+        line_height,
+        z_to_rgb_colour(z_windows[0]->output_background_colour));
+  }
+}
+
+
+static void refresh_input_line(bool display_cursor) {
   int nof_line_breaks, nof_new_input_lines;
   int last_active_z_window_id = -1;
   if (input_line_on_screen == false)
@@ -2106,23 +2128,7 @@ static void refresh_input_line(bool display_cursor) {
 
   z_windows[0]->ycursorpos = *current_input_y - z_windows[0]->ypos;
 
-  // Fill first input line.
-  screen_pixel_interface->fill_area(
-      *current_input_x,
-      *current_input_y,
-      z_windows[0]->xsize - z_windows[0]->rightmargin - *current_input_x + 2,
-      line_height,
-      z_to_rgb_colour(z_windows[0]->output_background_colour));
-
-  for (i=1; i<nof_input_lines; i++) {
-    screen_pixel_interface->fill_area(
-        z_windows[0]->xpos + z_windows[0]->leftmargin,
-        *current_input_y + i*line_height,
-        z_windows[0]->xsize - z_windows[0]->leftmargin
-        - z_windows[0]->rightmargin,
-        line_height,
-        z_to_rgb_colour(z_windows[0]->output_background_colour));
-  }
+  clear_input_line();
 
   nof_line_breaks = draw_glyph_string(current_input_buffer, 0, bold_font);
   TRACE_LOG("nof_line_breaks: %d\n", nof_line_breaks);
@@ -3354,8 +3360,13 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
   //refresh_cursor(active_z_window_id);
   */
 
-  refresh_input_line(false);
-  break_line(0);
+  //refresh_input_line(false);
+  clear_input_line();
+
+  z_windows[0]->ycursorpos = *current_input_y - z_windows[0]->ypos;
+  z_windows[0]->xcursorpos = *current_input_x - z_windows[0]->xpos
+    - z_windows[i]->leftmargin;
+
   input_line_on_screen = false;
   nof_input_lines = 0;
 
@@ -3721,7 +3732,7 @@ static void output_interface_info() {
 
 
 static bool input_must_be_repeated_by_story() {
-  return false;
+  return true;
 }
 
 
