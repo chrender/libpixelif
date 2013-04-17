@@ -158,6 +158,7 @@ static true_type_font *fixed_italic_font;
 static true_type_font *fixed_bold_font;
 static true_type_font *fixed_bold_italic_font;
 static int line_height;
+static int fixed_width_char_width;
 static true_type_wordwrapper *preloaded_wordwrapper;
 
 // Scrolling upwards:
@@ -1029,29 +1030,34 @@ static bool is_picture_font_availiable() {
 }
 
 
-static uint8_t get_screen_height_in_pixel() {
+static uint8_t get_screen_height_in_lines() {
+  printf("height: %d\n", screen_height_in_pixel / line_height);
   if (screen_height_in_pixel < 0)
     exit(-1);
   else
-    return screen_height_in_pixel;
+    return screen_height_in_pixel / line_height;
 }
 
 
-static uint8_t get_screen_width_in_pixel() {
+static uint8_t get_screen_width_in_characters() {
+  printf("width: %d\n", 
+      (screen_width_in_pixel - custom_left_margin - custom_right_margin)
+      / fixed_width_char_width);
   if (screen_width_in_pixel < 0)
     exit(-1);
   else
-    return screen_width_in_pixel;
+    return (screen_width_in_pixel - custom_left_margin - custom_right_margin)
+      / fixed_width_char_width;
 }
 
 
 static uint8_t get_screen_height_in_units() {
-  return get_screen_height_in_pixel();
+  return screen_height_in_pixel;
 }
 
 
 static uint8_t get_screen_width_in_units() {
-  return get_screen_width_in_pixel();
+  return screen_width_in_pixel;
 }
 
 
@@ -1347,6 +1353,10 @@ static void z_ucs_output(z_ucs *z_ucs_output) {
 }
 
 
+static void update_fixed_width_char_width() {
+  fixed_width_char_width = tt_get_glyph_advance(fixed_regular_font, '0', 0);
+}
+
 
 static void link_interface_to_story(struct z_story *story) {
   int bytes_to_allocate;
@@ -1469,6 +1479,8 @@ static void link_interface_to_story(struct z_story *story) {
     fixed_bold_italic_font = create_true_type_font(font_factory,
         fixed_bold_italic_font_filename, font_height_in_pixel, line_height);
   }
+
+  update_fixed_width_char_width();
 
   if (ver >= 5) {
     if ( (color_disabled == false)
@@ -1730,28 +1742,29 @@ static void set_buffer_mode(uint8_t new_buffer_mode) {
 
 
 static void split_window(int16_t nof_lines) {
-  int lines_delta;
+  int pixel_delta;
+  int nof_pixels = nof_lines * line_height;
 
-  if (nof_lines >= 0)
+  if (nof_pixels >= 0)
   {
-    if (nof_lines > screen_height_in_pixel)
-      nof_lines = screen_height_in_pixel;
+    if (nof_pixels > screen_height_in_pixel)
+      nof_pixels = screen_height_in_pixel;
 
-    lines_delta = nof_lines - z_windows[1]->ysize;
+    pixel_delta = nof_pixels - z_windows[1]->ysize;
 
-    if (lines_delta != 0) {
+    if (pixel_delta != 0) {
       TRACE_LOG("Old cursor y-pos for window 0: %d.\n",
           z_windows[0]->ycursorpos);
 
-      TRACE_LOG("delta %d\n", lines_delta);
+      TRACE_LOG("delta %d\n", pixel_delta);
 
       if (bool_equal(z_windows[0]->buffering, true))
         flush_window(0);
 
-      z_windows[0]->ysize -= lines_delta;
-      z_windows[0]->ycursorpos -= lines_delta;
-      z_windows[0]->ypos += lines_delta;
-      z_windows[1]->ysize += lines_delta;
+      z_windows[0]->ysize -= pixel_delta;
+      z_windows[0]->ycursorpos -= pixel_delta;
+      z_windows[0]->ypos += pixel_delta;
+      z_windows[1]->ysize += pixel_delta;
 
       if (z_windows[0]->ycursorpos < 1) {
         z_windows[0]->xcursorpos = 1;
@@ -1776,17 +1789,16 @@ static void split_window(int16_t nof_lines) {
           z_windows[0]->ypos);
 
       if (ver == 3) {
-        /*
-        screen_pixel_interface->clear_area(
+        screen_pixel_interface->fill_area(
             z_windows[1]->xpos,
             z_windows[1]->ypos,
             z_windows[1]->xsize,
-            z_windows[1]->ysize);
-        */
+            z_windows[1]->ysize,
+            z_to_rgb_colour(z_windows[1]->output_background_colour));
       }
     }
 
-    last_split_window_size = nof_lines;
+    last_split_window_size = nof_pixels;
   }
 }
 
@@ -1921,6 +1933,14 @@ static void set_colour(z_colour foreground, z_colour background,
 
 static void set_font(z_font font) {
   int i;
+
+  // 8.7.2.4: An interpreter should use a fixed-pitch font when printing
+  // on the upper window.
+
+  /*
+  if (version < 6) {
+    width_if (active_z_window_id
+    */
 
   TRACE_LOG("New font is %d.\n", font);
 
@@ -3365,7 +3385,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
 
   z_windows[0]->ycursorpos = *current_input_y - z_windows[0]->ypos;
   z_windows[0]->xcursorpos = *current_input_x - z_windows[0]->xpos
-    - z_windows[i]->leftmargin;
+    - z_windows[0]->leftmargin;
 
   input_line_on_screen = false;
   nof_input_lines = 0;
@@ -3656,6 +3676,11 @@ static void set_cursor(int16_t line, int16_t column, int16_t window_number) {
   if (bool_equal(z_windows[window_number]->buffering, true))
     flush_window(window_number);
 
+  // Move cursor in the current window to the position (x,y) (in units)
+  // relative to (1,1) in the top left [...] Also, if the cursor would lie
+  // outside the current margin settings, it is moved to the left margin
+  // of the current line.)
+
   if (column < 0)
     return;
   else if (line < 0) {
@@ -3677,6 +3702,9 @@ static void set_cursor(int16_t line, int16_t column, int16_t window_number) {
   if ( (window_number >= 0)
       && (window_number <=
         nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0))) {
+    // 8.7.2.3: When the upper window is selected, its cursor position can
+    // be moved with set_cursor. 
+
     z_windows[window_number]->ycursorpos
       = line > z_windows[window_number]->ysize
       ? z_windows[window_number]->ysize
@@ -3758,8 +3786,8 @@ static struct z_screen_interface z_pixel_interface = {
   &is_preloaded_input_available,
   &is_character_graphics_font_availiable,
   &is_picture_font_availiable,
-  &get_screen_height_in_pixel,
-  &get_screen_width_in_pixel,
+  &get_screen_height_in_lines,
+  &get_screen_width_in_characters,
   &get_screen_width_in_units,
   &get_screen_height_in_units,
   &get_font_width_in_units,
@@ -3838,6 +3866,7 @@ void new_pixel_screen_size(int newysize, int newxsize) {
 
   screen_width_in_pixel = newxsize;
   screen_height_in_pixel = newysize;
+  update_fixed_width_char_width();
 
   fizmo_new_screen_size(screen_width_in_pixel, screen_height_in_pixel);
 
