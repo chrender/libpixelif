@@ -233,6 +233,8 @@ static int draw_glyph_string(z_ucs *z_ucs_output, int window_number,
 
 
 static void clear_to_eol(int window_number) {
+  int width, yspace, height;
+
   // Clear the remaining space on the line. This also ensures that the
   // background color for the line will be the current output_color.
 
@@ -241,14 +243,38 @@ static void clear_to_eol(int window_number) {
         + z_windows[window_number]->rightmost_filled_xpos - 1);
   */
 
+  width
+    = z_windows[window_number]->xsize
+    - z_windows[window_number]->rightmost_filled_xpos
+    + 1;
+
+  yspace
+    = z_windows[window_number]->ysize
+    - z_windows[window_number]->lower_padding
+    - z_windows[window_number]->ycursorpos;
+
+  height
+    = yspace < line_height
+    ? yspace
+    : line_height;
+
+  /*
+  printf("clear-to-eol: %d, %d, %d, %d.\n",
+      z_windows[window_number]->xpos
+      + z_windows[window_number]->rightmost_filled_xpos - 1,
+      z_windows[window_number]->ypos
+      + z_windows[window_number]->ycursorpos,
+      width,
+      height);
+  */
+
   screen_pixel_interface->fill_area(
       (z_windows[window_number]->xpos
        + z_windows[window_number]->rightmost_filled_xpos - 1),
       (z_windows[window_number]->ypos
        + z_windows[window_number]->ycursorpos),
-      (z_windows[window_number]->xsize
-         - z_windows[window_number]->rightmost_filled_xpos + 1),
-      (line_height),
+      width,
+      height,
       z_to_rgb_colour(z_windows[window_number]->output_background_colour));
 }
 
@@ -269,64 +295,79 @@ static bool break_line(int window_number) {
 
   clear_to_eol(window_number);
 
-  z_windows[window_number]->xcursorpos = 1;
-  z_windows[window_number]->last_gylphs_xcursorpos = -1;
-  z_windows[window_number]->rightmost_filled_xpos
-    = z_windows[window_number]->xcursorpos;
-
   pixels_to_scroll_up
     = z_windows[window_number]->ycursorpos + 2*line_height
     + z_windows[window_number]->lower_padding
     - z_windows[window_number]->ysize;
   //printf("pixels to scroll up: %d\n", pixels_to_scroll_up);
 
-  if (pixels_to_scroll_up > 0) {
-    TRACE_LOG("scrolling line up by %d pixels.\n", pixels_to_scroll_up);
-
-    /*
-    printf("copy-area: %d/%d to %d/%d, %d x %d\n",
-        z_windows[window_number]->ypos + pixels_to_scroll_up,
-        z_windows[window_number]->xpos,
-        z_windows[window_number]->ypos,
-        z_windows[window_number]->xpos,
-        z_windows[window_number]->xsize,
-        z_windows[window_number]->ysize - pixels_to_scroll_up
-        - z_windows[window_number]->lower_padding);
-    */
-
-    screen_pixel_interface->copy_area(
-        z_windows[window_number]->ypos,
-        z_windows[window_number]->xpos,
-        z_windows[window_number]->ypos + pixels_to_scroll_up,
-        z_windows[window_number]->xpos,
-        z_windows[window_number]->ysize - pixels_to_scroll_up
-        - z_windows[window_number]->lower_padding,
-        z_windows[window_number]->xsize);
-
-    /*
-    // begin QUARTZ_WM_WORKAROUND
-    screen_pixel_interface->fill_area(
-        z_windows[window_number]->xpos
-        + z_windows[window_number]->xsize
-        - z_windows[window_number]->rightmargin
-        +1,
-        z_windows[window_number]->ypos
-        + z_windows[window_number]->ysize - line_height,
-        z_windows[window_number]->rightmargin,
-        line_height,
-        z_to_rgb_colour(z_windows[window_number]->output_background_colour));
-    // end ENABLE_QUARTZ_WM_WORKAROUND
-    */
-
-    z_windows[window_number]->ycursorpos
-      = z_windows[window_number]->ysize - line_height
-      - z_windows[window_number]->lower_padding;
+  if (window_number == 1) {
+    if (pixels_to_scroll_up <= 0) {
+      z_windows[window_number]->ycursorpos += line_height;
+      z_windows[window_number]->xcursorpos = 1;
+    }
+    else {
+      // 8.6.2 The upper window should never be scrolled: it is legal for
+      // character to be printed on the bottom right position of the upper
+      // window (but the position of the cursor after this operation is
+      // undefined: the author suggests that it stay put).
+    }
   }
   else {
-    TRACE_LOG("breaking line\n");
-    z_windows[window_number]->ycursorpos += line_height;
+    z_windows[window_number]->xcursorpos = 1;
+
+    if (pixels_to_scroll_up > 0) {
+      TRACE_LOG("scrolling line up by %d pixels.\n", pixels_to_scroll_up);
+
+      /*
+         printf("copy-area: %d/%d to %d/%d, %d x %d\n",
+         z_windows[window_number]->ypos + pixels_to_scroll_up,
+         z_windows[window_number]->xpos,
+         z_windows[window_number]->ypos,
+         z_windows[window_number]->xpos,
+         z_windows[window_number]->xsize,
+         z_windows[window_number]->ysize - pixels_to_scroll_up
+         - z_windows[window_number]->lower_padding);
+         */
+
+      screen_pixel_interface->copy_area(
+          z_windows[window_number]->ypos,
+          z_windows[window_number]->xpos,
+          z_windows[window_number]->ypos + pixels_to_scroll_up,
+          z_windows[window_number]->xpos,
+          z_windows[window_number]->ysize - pixels_to_scroll_up
+          - z_windows[window_number]->lower_padding,
+          z_windows[window_number]->xsize);
+
+      /*
+      // begin QUARTZ_WM_WORKAROUND
+      screen_pixel_interface->fill_area(
+      z_windows[window_number]->xpos
+      + z_windows[window_number]->xsize
+      - z_windows[window_number]->rightmargin
+      +1,
+      z_windows[window_number]->ypos
+      + z_windows[window_number]->ysize - line_height,
+      z_windows[window_number]->rightmargin,
+      line_height,
+      z_to_rgb_colour(z_windows[window_number]->output_background_colour));
+      // end ENABLE_QUARTZ_WM_WORKAROUND
+      */
+
+      z_windows[window_number]->ycursorpos
+        = z_windows[window_number]->ysize - line_height
+        - z_windows[window_number]->lower_padding;
+    }
+    else {
+      TRACE_LOG("breaking line\n");
+      z_windows[window_number]->ycursorpos += line_height;
+    }
+    TRACE_LOG("new y-cursorpos: %d\n", z_windows[window_number]->ycursorpos);
   }
-  TRACE_LOG("new y-cursorpos: %d\n", z_windows[window_number]->ycursorpos);
+
+  z_windows[window_number]->last_gylphs_xcursorpos = -1;
+  z_windows[window_number]->rightmost_filled_xpos
+    = z_windows[window_number]->xcursorpos;
 
   nof_break_line_invocations++;
   z_windows[window_number]->nof_consecutive_lines_output++;
@@ -419,19 +460,30 @@ static int draw_glyph(z_ucs charcode, int window_number,
     return 1;
   }
 
+  /*
   if (bool_equal(z_windows[window_number]->buffering, true)) {
-    if (z_windows[window_number]->output_text_style & Z_STYLE_REVERSE_VIDEO)
-      reverse = true;
   }
   else {
     if (z_windows[window_number]->text_style & Z_STYLE_REVERSE_VIDEO)
       reverse = true;
   }
+  */
+
+  if (z_windows[window_number]->output_text_style & Z_STYLE_REVERSE_VIDEO)
+    reverse = true;
 
   advance = tt_get_glyph_advance(font, charcode, 0);
 
   TRACE_LOG("Max draw glyph size: %d.\n",
       z_windows[window_number]->xsize - z_windows[window_number]->rightmargin);
+
+  TRACE_LOG(
+      "leftmargin:%d, xcursorpos:%d, advance:%d, xsize:%d, rightmargin:%d\n",
+      z_windows[window_number]->leftmargin,
+      z_windows[window_number]->xcursorpos,
+      advance,
+      z_windows[window_number]->xsize,
+      z_windows[window_number]->rightmargin);
 
   if (z_windows[window_number]->leftmargin
       + z_windows[window_number]->xcursorpos
@@ -1031,23 +1083,24 @@ static bool is_picture_font_availiable() {
 
 
 static uint8_t get_screen_height_in_lines() {
+  /*
   printf("height: %d\n", screen_height_in_pixel / line_height);
   if (screen_height_in_pixel < 0)
     exit(-1);
   else
-    return screen_height_in_pixel / line_height;
+    */
+  return screen_height_in_pixel / line_height;
 }
 
 
 static uint8_t get_screen_width_in_characters() {
-  printf("width: %d\n", 
+  /*
+  printf("width (%d, %d): %d\n", 
       (screen_width_in_pixel - custom_left_margin - custom_right_margin)
-      / fixed_width_char_width);
-  if (screen_width_in_pixel < 0)
-    exit(-1);
-  else
-    return (screen_width_in_pixel - custom_left_margin - custom_right_margin)
-      / fixed_width_char_width;
+      / fixed_width_char_width,
+      custom_left_margin, custom_right_margin);
+  */
+  return screen_width_in_pixel / fixed_width_char_width;
 }
 
 
@@ -1355,6 +1408,7 @@ static void z_ucs_output(z_ucs *z_ucs_output) {
 
 static void update_fixed_width_char_width() {
   fixed_width_char_width = tt_get_glyph_advance(fixed_regular_font, '0', 0);
+  printf("fixed_width_char_width: %d\n", fixed_width_char_width);
 }
 
 
@@ -1556,7 +1610,7 @@ static void link_interface_to_story(struct z_story *story) {
         z_windows[i]->ysize = 0;
         z_windows[i]->xsize = screen_width_in_pixel;
         if (statusline_window_id > 0)
-          z_windows[i]->ypos++;
+          z_windows[i]->ypos += line_height;
         if (ver != 6) {
           z_windows[i]->font_type = Z_FONT_COURIER_FIXED_PITCH;
           z_windows[i]->output_font = Z_FONT_COURIER_FIXED_PITCH;
@@ -1566,8 +1620,8 @@ static void link_interface_to_story(struct z_story *story) {
       else if (i == statusline_window_id) {
         z_windows[i]->ysize = line_height;
         z_windows[i]->xsize = screen_width_in_pixel;
-        z_windows[i]->text_style = Z_STYLE_REVERSE_VIDEO;
-        z_windows[i]->output_text_style = Z_STYLE_REVERSE_VIDEO;
+        //z_windows[i]->text_style = Z_STYLE_REVERSE_VIDEO;
+        //z_windows[i]->output_text_style = Z_STYLE_REVERSE_VIDEO;
       }
       else {
         z_windows[i]->ysize = 0;
@@ -1585,10 +1639,20 @@ static void link_interface_to_story(struct z_story *story) {
 
     z_windows[i]->newline_routine = 0;
     z_windows[i]->interrupt_countdown = 0;
-    z_windows[i]->foreground_colour = default_foreground_colour;
-    z_windows[i]->background_colour = default_background_colour;
-    z_windows[i]->output_foreground_colour = default_foreground_colour;
-    z_windows[i]->output_background_colour = default_background_colour;
+
+    if (i == statusline_window_id) {
+      z_windows[i]->background_colour = Z_COLOUR_BLACK;
+      z_windows[i]->output_background_colour = Z_COLOUR_BLACK;
+      z_windows[i]->foreground_colour = Z_COLOUR_WHITE;
+      z_windows[i]->output_foreground_colour = Z_COLOUR_WHITE;
+    }
+    else {
+      z_windows[i]->foreground_colour = default_foreground_colour;
+      z_windows[i]->background_colour = default_background_colour;
+      z_windows[i]->output_foreground_colour = default_foreground_colour;
+      z_windows[i]->output_background_colour = default_background_colour;
+    }
+
     z_windows[i]->font_type = 0;
     z_windows[i]->font_size = 0;
     z_windows[i]->line_count = 0;
@@ -2171,6 +2235,121 @@ static void refresh_input_line(bool display_cursor) {
 }
 
 
+static int number_length(int number) {
+  if (number == 0)
+    return 1;
+  else
+    return ((int)log10(abs(number))) + (number < 0 ? 1 : 0) + 1;
+}
+
+
+static void show_status(z_ucs *room_description, int status_line_mode,
+    int16_t parameter1, int16_t parameter2) {
+  int desc_len = z_ucs_len(room_description);
+  int score_length, turn_length, rightside_length, room_desc_space;
+  z_ucs rightside_buf_zucs[libpixelif_right_status_min_size + 12];
+  z_ucs buf = 0;
+  z_ucs *ptr;
+  char latin1_buf[8];
+  int last_active_z_window_id;
+  //int i;
+  //z_ucs *ptr2;
+
+  TRACE_LOG("statusline: \"");
+  TRACE_LOG_Z_UCS(room_description);
+  TRACE_LOG("\".\n");
+
+  TRACE_LOG("statusline-xsize: %d, screen:%d.\n",
+      z_windows[statusline_window_id]->xsize, screen_width_in_pixel);
+
+  if (statusline_window_id > 0) {
+    z_windows[statusline_window_id]->ycursorpos = 1;
+    z_windows[statusline_window_id]->xcursorpos = 1;
+    z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
+    z_windows[statusline_window_id]->rightmost_filled_xpos
+      = z_windows[statusline_window_id]->xcursorpos;
+
+    last_active_z_window_id = active_z_window_id;
+    switch_to_window(statusline_window_id);
+    erase_window(statusline_window_id);
+
+    if (status_line_mode == SCORE_MODE_SCORE_AND_TURN) {
+      score_length = number_length(parameter1);
+      turn_length = number_length(parameter2);
+
+      rightside_length
+        = libpixelif_right_status_min_size - 2 + score_length + turn_length;
+
+      room_desc_space
+        = z_windows[statusline_window_id]->xsize - rightside_length - 3;
+
+      if (room_desc_space < desc_len) {
+        buf = room_description[room_desc_space];
+        room_description[room_desc_space] = 0;
+      }
+
+      z_windows[statusline_window_id]->xcursorpos = 2;
+      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
+      z_windows[statusline_window_id]->rightmost_filled_xpos
+        = z_windows[statusline_window_id]->xcursorpos;
+      //refresh_cursor(statusline_window_id);
+      z_ucs_output(room_description);
+
+      z_windows[statusline_window_id]->xcursorpos
+        = z_windows[statusline_window_id]->xsize - rightside_length + 1;
+      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
+      z_windows[statusline_window_id]->rightmost_filled_xpos
+        = z_windows[statusline_window_id]->xcursorpos;
+      //refresh_cursor(statusline_window_id);
+
+      ptr = z_ucs_cpy(rightside_buf_zucs, libpixelif_score_string);
+      sprintf(latin1_buf, ": %d  ", parameter1);
+      ptr = z_ucs_cat_latin1(ptr, latin1_buf);
+      ptr = z_ucs_cat(ptr, libpixelif_turns_string);
+      sprintf(latin1_buf, ": %d", parameter2);
+      ptr = z_ucs_cat_latin1(ptr, latin1_buf);
+
+      z_ucs_output(rightside_buf_zucs);
+
+      if (buf != 0)
+        room_description[room_desc_space] = buf;
+    }
+    else if (status_line_mode == SCORE_MODE_TIME) {
+      // FIXME:
+      room_desc_space = z_windows[statusline_window_id]->xsize - 8;
+
+      if (room_desc_space < desc_len) {
+        buf = room_description[room_desc_space];
+        room_description[room_desc_space] = 0;
+      }
+
+      z_windows[statusline_window_id]->xcursorpos = 2;
+      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
+      z_windows[statusline_window_id]->rightmost_filled_xpos
+        = z_windows[statusline_window_id]->xcursorpos;
+      //refresh_cursor(statusline_window_id);
+      z_ucs_output(room_description);
+
+      z_windows[statusline_window_id]->xcursorpos
+        = z_windows[statusline_window_id]->xsize - 100;
+      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
+      z_windows[statusline_window_id]->rightmost_filled_xpos
+        = z_windows[statusline_window_id]->xcursorpos;
+      //refresh_cursor(statusline_window_id);
+
+      sprintf(latin1_buf, "%02d:%02d", parameter1, parameter2);
+      latin1_string_to_zucs_string(rightside_buf_zucs, latin1_buf, 8);
+      z_ucs_output(rightside_buf_zucs);
+
+      if (buf != 0)
+        room_description[room_desc_space] = buf;
+    }
+
+    switch_to_window(last_active_z_window_id);
+  }
+}
+
+
 static void refresh_screen() {
   int last_active_z_window_id = -1;
   int y_height_to_fill;
@@ -2270,7 +2449,13 @@ static void refresh_screen() {
     *current_input_y = z_windows[0]->ypos + z_windows[0]->ycursorpos;
     refresh_input_line(true);
   }
+
+  if (ver <= 3)
+    display_status_line();
+
   screen_pixel_interface->update_screen();
+
+  return;
 
   /*
   int start_y, paragraphs_to_output;
@@ -3491,6 +3676,16 @@ static int read_char(uint16_t tenth_seconds, uint32_t verification_routine,
         result = 132;
         input_in_progress = false;
       }
+      else if (event_type == EVENT_WAS_CODE_BACKSPACE)
+      {
+        result = 8;
+        input_in_progress = false;
+      }
+      else if (event_type == EVENT_WAS_CODE_DELETE)
+      {
+        result = 127;
+        input_in_progress = false;
+      }
       else if (event_type == EVENT_WAS_TIMEOUT) {
         TRACE_LOG("timeout found.\n");
 
@@ -3540,121 +3735,6 @@ static int read_char(uint16_t tenth_seconds, uint32_t verification_routine,
 }
 
 
-static int number_length(int number) {
-  if (number == 0)
-    return 1;
-  else
-    return ((int)log10(abs(number))) + (number < 0 ? 1 : 0) + 1;
-}
-
-
-static void show_status(z_ucs *room_description, int status_line_mode,
-    int16_t parameter1, int16_t parameter2) {
-  int desc_len = z_ucs_len(room_description);
-  int score_length, turn_length, rightside_length, room_desc_space;
-  z_ucs rightside_buf_zucs[libpixelif_right_status_min_size + 12];
-  z_ucs buf = 0;
-  z_ucs *ptr;
-  char latin1_buf[8];
-  int last_active_z_window_id;
-  //int i;
-  //z_ucs *ptr2;
-
-  TRACE_LOG("statusline: \"");
-  TRACE_LOG_Z_UCS(room_description);
-  TRACE_LOG("\".\n");
-
-  TRACE_LOG("statusline-xsize: %d, screen:%d.\n",
-      z_windows[statusline_window_id]->xsize, screen_width_in_pixel);
-
-  if (statusline_window_id > 0) {
-    z_windows[statusline_window_id]->ycursorpos = 1;
-    z_windows[statusline_window_id]->xcursorpos = 1;
-    z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
-    z_windows[statusline_window_id]->rightmost_filled_xpos
-      = z_windows[statusline_window_id]->xcursorpos;
-
-    last_active_z_window_id = active_z_window_id;
-    switch_to_window(statusline_window_id);
-    erase_window(statusline_window_id);
-
-    if (status_line_mode == SCORE_MODE_SCORE_AND_TURN) {
-      score_length = number_length(parameter1);
-      turn_length = number_length(parameter2);
-
-      rightside_length
-        = libpixelif_right_status_min_size - 2 + score_length + turn_length;
-
-      room_desc_space
-        = z_windows[statusline_window_id]->xsize - rightside_length - 3;
-
-      if (room_desc_space < desc_len) {
-        buf = room_description[room_desc_space];
-        room_description[room_desc_space] = 0;
-      }
-
-      z_windows[statusline_window_id]->xcursorpos = 2;
-      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
-      z_windows[statusline_window_id]->rightmost_filled_xpos
-        = z_windows[statusline_window_id]->xcursorpos;
-      //refresh_cursor(statusline_window_id);
-      z_ucs_output(room_description);
-
-      z_windows[statusline_window_id]->xcursorpos
-        = z_windows[statusline_window_id]->xsize - rightside_length + 1;
-      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
-      z_windows[statusline_window_id]->rightmost_filled_xpos
-        = z_windows[statusline_window_id]->xcursorpos;
-      //refresh_cursor(statusline_window_id);
-
-      ptr = z_ucs_cpy(rightside_buf_zucs, libpixelif_score_string);
-      sprintf(latin1_buf, ": %d  ", parameter1);
-      ptr = z_ucs_cat_latin1(ptr, latin1_buf);
-      ptr = z_ucs_cat(ptr, libpixelif_turns_string);
-      sprintf(latin1_buf, ": %d", parameter2);
-      ptr = z_ucs_cat_latin1(ptr, latin1_buf);
-
-      z_ucs_output(rightside_buf_zucs);
-
-      if (buf != 0)
-        room_description[room_desc_space] = buf;
-    }
-    else if (status_line_mode == SCORE_MODE_TIME) {
-      // FIXME:
-      room_desc_space = z_windows[statusline_window_id]->xsize - 8;
-
-      if (room_desc_space < desc_len) {
-        buf = room_description[room_desc_space];
-        room_description[room_desc_space] = 0;
-      }
-
-      z_windows[statusline_window_id]->xcursorpos = 2;
-      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
-      z_windows[statusline_window_id]->rightmost_filled_xpos
-        = z_windows[statusline_window_id]->xcursorpos;
-      //refresh_cursor(statusline_window_id);
-      z_ucs_output(room_description);
-
-      z_windows[statusline_window_id]->xcursorpos
-        = z_windows[statusline_window_id]->xsize - 100;
-      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
-      z_windows[statusline_window_id]->rightmost_filled_xpos
-        = z_windows[statusline_window_id]->xcursorpos;
-      //refresh_cursor(statusline_window_id);
-
-      sprintf(latin1_buf, "%02d:%02d", parameter1, parameter2);
-      latin1_string_to_zucs_string(rightside_buf_zucs, latin1_buf, 8);
-      z_ucs_output(rightside_buf_zucs);
-
-      if (buf != 0)
-        room_description[room_desc_space] = buf;
-    }
-
-    switch_to_window(last_active_z_window_id);
-  }
-}
-
-
 static void set_window(int16_t window_number) {
   if ( (window_number >= 0)
       && (window_number <=
@@ -3673,6 +3753,8 @@ static void set_window(int16_t window_number) {
 
 
 static void set_cursor(int16_t line, int16_t column, int16_t window_number) {
+  int pixel_line, pixel_column;
+
   if (bool_equal(z_windows[window_number]->buffering, true))
     flush_window(window_number);
 
@@ -3699,23 +3781,26 @@ static void set_cursor(int16_t line, int16_t column, int16_t window_number) {
   TRACE_LOG("set_cursor: %d %d %d %d\n",
       line, column, window_number, z_windows[window_number]->ysize);
 
-  if ( (window_number >= 0)
-      && (window_number <=
-        nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0))) {
-    // 8.7.2.3: When the upper window is selected, its cursor position can
-    // be moved with set_cursor. 
+  // 8.7.2.3: When the upper window is selected, its cursor position can
+  // be moved with set_cursor. 
+  if (window_number == 1) {
+    pixel_line = line * line_height;
+    pixel_column = column * fixed_width_char_width;
 
     z_windows[window_number]->ycursorpos
-      = line > z_windows[window_number]->ysize
-      ? z_windows[window_number]->ysize
-      : line;
+      = pixel_line > (z_windows[window_number]->ysize - line_height)
+      ? z_windows[window_number]->ysize - line_height
+      : pixel_line;
 
     z_windows[window_number]->xcursorpos
-      = column > z_windows[window_number]->xsize
+      = pixel_column > z_windows[window_number]->xsize
+      ? z_windows[window_number]->xsize - pixel_column
+      /*
       ? (z_windows[window_number]->wrapping == false
           ? z_windows[window_number]->xsize + 1
           : z_windows[window_number]->xsize)
-      : column;
+      */
+      : pixel_column;
 
     z_windows[window_number]->last_gylphs_xcursorpos = -1;
     z_windows[window_number]->rightmost_filled_xpos
@@ -3841,12 +3926,14 @@ void fizmo_register_screen_pixel_interface(struct z_screen_pixel_interface
 
 
 void set_custom_left_pixel_margin(int width) {
-  custom_left_margin = (width > 0 ? width * font_height_in_pixel : 0);
+  printf("custom\n");
+  custom_left_margin = (width > 0 ? width * fixed_width_char_width : 0);
 }
 
 
 void set_custom_right_pixel_margin(int width) {
-  custom_right_margin = (width > 0 ? width * font_height_in_pixel : 0);
+  printf("custom\n");
+  custom_right_margin = (width > 0 ? width * fixed_width_char_width : 0);
 }
 
 
@@ -3930,8 +4017,11 @@ void new_pixel_screen_size(int newysize, int newxsize) {
       TRACE_LOG("new ycursorpos[%d]: %d\n", i, z_windows[i]->ycursorpos);
     }
 
-    if (z_windows[i]->xcursorpos > z_windows[i]->xsize)
-      z_windows[i]->xcursorpos = z_windows[i]->xsize;
+    if (z_windows[i]->xcursorpos > z_windows[i]->xsize - fixed_width_char_width
+        - z_windows[i]->rightmargin - z_windows[i]->rightmargin) {
+      z_windows[i]->xcursorpos = z_windows[i]->xsize - fixed_width_char_width
+        - z_windows[i]->rightmargin - z_windows[i]->rightmargin;
+    }
   }
 
   /*
