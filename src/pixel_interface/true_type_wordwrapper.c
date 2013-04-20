@@ -327,6 +327,7 @@ static void process_line_end(true_type_wordwrapper *wrapper,
 void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
   z_ucs *input_index = input;
   z_ucs current_char, last_char; //, char_before_last_char;
+  int advance, bitmap_width;
 
   // In order to build an algorithm most suitable to both enabled and
   // disabled hyphenation, we'll collect input until we'll find the first
@@ -372,8 +373,9 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
     wrapper->current_buffer_index++;
 
     if (current_char != Z_UCS_NEWLINE) {
-      wrapper->current_advance_position
-        += tt_get_glyph_advance(wrapper->current_font, current_char, last_char);
+      tt_get_glyph_size(wrapper->current_font, current_char,
+          &advance, &bitmap_width);
+      wrapper->current_advance_position += advance;
     }
 
     // In case we're hitting a space or newline we have to evaluate whether

@@ -53,13 +53,17 @@ int tt_get_glyph_get_distance_to_rightmost_pixel(true_type_font *font,
 */
 
 
-int tt_get_glyph_advance(true_type_font *font, z_ucs current_char,
-    z_ucs UNUSED(last_char)) {
+//int tt_get_glyph_advance(true_type_font *font, z_ucs current_char,
+//    z_ucs UNUSED(last_char)) {
+int tt_get_glyph_size(true_type_font *font, z_ucs char_code,
+    int *advance, int *bitmap_width) {
+
   FT_UInt glyph_index;
   FT_GlyphSlot slot;
+  FT_Bitmap bitmap;
   int ft_error;
 
-  glyph_index = FT_Get_Char_Index(font->face, current_char);
+  glyph_index = FT_Get_Char_Index(font->face, char_code);
 
   ft_error = FT_Load_Glyph(
       font->face,
@@ -67,8 +71,12 @@ int tt_get_glyph_advance(true_type_font *font, z_ucs current_char,
       FT_LOAD_DEFAULT);
 
   slot = font->face->glyph;
+  bitmap = slot->bitmap;
 
-  return slot->advance.x / 64;
+  *advance = slot->advance.x / 64;
+  *bitmap_width = bitmap.width;
+
+  return 0;
 }
 
 
@@ -79,7 +87,7 @@ int tt_get_glyph_advance(true_type_font *font, z_ucs current_char,
 // by using "SourceSansPro-It.ttf" in etude.z5 section 4 and looking at
 // "Test of italic (or underlined) text." where the closing bracket
 // overwrites the right d's vertical stroke.
-int tt_draw_glyph(true_type_font *font, int x, int y,
+int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
     z_rgb_colour foreground_colour,
     z_rgb_colour background_colour,
     struct z_screen_pixel_interface *screen_pixel_interface,
@@ -109,9 +117,7 @@ int tt_draw_glyph(true_type_font *font, int x, int y,
   slot = font->face->glyph;
   bitmap = slot->bitmap;
   advance = slot->advance.x / 64;
-
-  draw_width
-    = advance > bitmap.width ? advance : bitmap.width;
+  draw_width = advance > bitmap.width ? advance : bitmap.width;
 
   //printf("last_gylphs_xcursorpos: %d, x: %d.\n", *last_gylphs_xcursorpos, x);
   if ((last_gylphs_xcursorpos) && (*last_gylphs_xcursorpos >= 0)) {
@@ -129,6 +135,20 @@ int tt_draw_glyph(true_type_font *font, int x, int y,
     *last_gylphs_xcursorpos = x + slot->bitmap_left + draw_width;
   }
 
+  //printf("x:%d, rev:%d, xspace:%d\n", x, reverse_width, x_max);
+  if (x + reverse_width > x_max) {
+    reverse_width = x_max - left_reverse_x;
+  }
+
+  /*
+  printf("fill glyph area for %c at %d,%d / %dx%d, max: %d\n",
+      charcode,
+      left_reverse_x,
+      y,
+      reverse_width,
+      font->line_height,
+      x_max);
+  */
   screen_pixel_interface->fill_area(
       left_reverse_x,
       y,
@@ -137,6 +157,10 @@ int tt_draw_glyph(true_type_font *font, int x, int y,
       background_colour);
 
   x += slot->bitmap_left;
+  /*
+  printf("y: %d, %d, %d\n", 
+      y, (int)font->face->size->metrics.ascender/64, (int)slot->bitmap_top);
+  */
   y += font->face->size->metrics.ascender/64 - slot->bitmap_top;
 
   // FIXME: Free glyph's memory.

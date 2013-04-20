@@ -60,6 +60,7 @@ typedef struct {
   long last_word_end_index; // last word end buffer index
   long last_word_end_advance_position; // right position of last word in line
   long current_advance_position;
+  long current_width_position;
 } true_type_wordwrapper;
 
 

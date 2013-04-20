@@ -50,9 +50,9 @@ struct true_type_font_struct {
 
 typedef struct true_type_font_struct true_type_font;
 
-int tt_get_glyph_advance(true_type_font *font, z_ucs current_char,
-    z_ucs last_char);
-int tt_draw_glyph(true_type_font *font, int x, int y,
+int tt_get_glyph_size(true_type_font *font, z_ucs char_code,
+    int *advance, int *bitmap_width);
+int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
     z_rgb_colour foreground_colour, z_rgb_colour background_colour,
     struct z_screen_pixel_interface *screen_pixel_interface,
     z_ucs charcode, int *last_gylphs_xcursorpos);
