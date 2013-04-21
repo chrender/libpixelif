@@ -69,7 +69,9 @@ static void set_font(true_type_wordwrapper *wrapper, true_type_font *new_font) {
 void freetype_wordwrap_reset_position(true_type_wordwrapper *wrapper) {
   wrapper->last_word_end_index = -1;
   wrapper->last_word_end_advance_position = 0;
+  wrapper->last_word_end_width_position = 0;
   wrapper->current_advance_position = 0;
+  wrapper->current_width_position = 0;
 }
 
 
@@ -145,6 +147,13 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
   int output_metadata_index, output_index;
   struct freetype_wordwrap_metadata *metadata_entry;
   int i;
+
+  /*
+  for (i=0; i<flush_index; i++) {
+    printf("%c", wrapper->input_buffer[i]);
+  }
+  printf("\n");
+  */
 
   TRACE_LOG("flush on: %c %d \n",
       (char)wrapper->input_buffer[flush_index],
@@ -259,12 +268,13 @@ static void process_line_end(true_type_wordwrapper *wrapper,
   z_ucs buf_1;
   long flush_index;
 
-  TRACE_LOG("lwei: %ld / lweap: %ld / ll: %d\n",
+  TRACE_LOG("lwei: %ld / lweap: %ld / lwewp: %ld / ll: %d\n",
       wrapper->last_word_end_index,
       wrapper->last_word_end_advance_position,
+      wrapper->last_word_end_width_position,
       wrapper->line_length);
 
-  if (wrapper->current_advance_position > wrapper->line_length) {
+  if (wrapper->current_width_position > wrapper->line_length) {
     TRACE_LOG("Behind past line, match on space|newline, breaking.\n");
     // In case we exceed the right margin, we have to break the line
     // before the last word.
@@ -279,6 +289,7 @@ static void process_line_end(true_type_wordwrapper *wrapper,
       flush_line(wrapper, flush_index);
       wrapper->input_buffer[flush_index] = buf_1;
       wrapper->current_advance_position = 0;
+      wrapper->current_width_position = 0;
     }
     else {
       // Otherwise, we simply break after the last word.
@@ -286,13 +297,22 @@ static void process_line_end(true_type_wordwrapper *wrapper,
       flush_index = wrapper->last_word_end_index;
 
       wrapper->input_buffer[flush_index] = Z_UCS_NEWLINE;
+      //printf("%ld:", wrapper->last_word_end_width_position);
+
       flush_line(wrapper, flush_index);
+      //printf("\n");
 
       wrapper->current_advance_position
         -= wrapper->last_word_end_advance_position;
 
+      wrapper->current_width_position
+        = wrapper->current_advance_position;
+
       wrapper->last_word_end_advance_position
         = wrapper->current_advance_position;
+
+      wrapper->last_word_end_width_position
+        = wrapper->current_width_position;
 
       wrapper->last_word_end_index
         = wrapper->current_buffer_index;
@@ -308,7 +328,9 @@ static void process_line_end(true_type_wordwrapper *wrapper,
         wrapper->current_buffer_index - 1);
 
     wrapper->last_word_end_advance_position = 0;
+    wrapper->last_word_end_width_position = 0;
     wrapper->current_advance_position = 0;
+    wrapper->current_width_position = 0;
     wrapper->last_word_end_index = -1;
   }
   else if ( (current_char == Z_UCS_SPACE) && (last_char != Z_UCS_SPACE) ) {
@@ -318,6 +340,8 @@ static void process_line_end(true_type_wordwrapper *wrapper,
         wrapper->last_word_end_advance_position);
     wrapper->last_word_end_advance_position
       = wrapper->current_advance_position;
+    wrapper->last_word_end_width_position
+      = wrapper->current_width_position;
     wrapper->last_word_end_index
       = wrapper->current_buffer_index - 1;
   }
@@ -375,6 +399,12 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
     if (current_char != Z_UCS_NEWLINE) {
       tt_get_glyph_size(wrapper->current_font, current_char,
           &advance, &bitmap_width);
+      wrapper->current_width_position
+        = wrapper->current_advance_position + bitmap_width;
+      /*
+      printf("current_width_position: %ld for '%c'\n",
+          wrapper->current_width_position, current_char);
+      */
       wrapper->current_advance_position += advance;
     }
 
@@ -435,8 +465,6 @@ void freetype_wordwrap_insert_metadata(true_type_wordwrapper *wrapper,
     = ptr_parameter;
   wrapper->metadata[wrapper->metadata_index].int_parameter
     = int_parameter;
-  //wrapper->metadata[wrapper->metadata_index].new_font
-  // = new_font;
 
   if (new_font != NULL) {
     set_font(wrapper, new_font);

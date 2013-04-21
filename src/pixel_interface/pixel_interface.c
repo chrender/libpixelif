@@ -104,7 +104,6 @@ struct z_window {
   z_style output_text_style;
   z_style output_font;
   true_type_font *output_true_type_font;
-  bool fixedfont_forced_by_flags2;
 
   true_type_wordwrapper *wordwrapper;
   z_style current_wrapper_style;
@@ -486,8 +485,7 @@ static int draw_glyph(z_ucs charcode, int window_number,
 
   if (z_windows[window_number]->leftmargin
       + z_windows[window_number]->xcursorpos
-      + advance
-      //- 1 // since we're always starting with xcursorpos = 1
+      + bitmap_width
       > z_windows[window_number]->xsize
       - z_windows[window_number]->rightmargin) {
     break_line(window_number);
@@ -500,7 +498,8 @@ static int draw_glyph(z_ucs charcode, int window_number,
 
   x_max
     = z_windows[window_number]->xsize
-    - z_windows[window_number]->rightmargin;
+    - z_windows[window_number]->rightmargin
+    - 1;
 
   y = z_windows[window_number]->ypos
     + z_windows[window_number]->ycursorpos;
@@ -577,12 +576,11 @@ static void wordwrap_output_colour(void *window_number, uint32_t color_data) {
 }
 
 
-static true_type_font *evaluate_font(z_style text_style, z_font font,
-    bool force_fixed_pitch) {
+static true_type_font *evaluate_font(z_style text_style, z_font font) {
   true_type_font *result;
+  TRACE_LOG("evaluate-font: style %d, font %d.\n", text_style, font);
 
   if ( (font == Z_FONT_COURIER_FIXED_PITCH)
-      || (force_fixed_pitch == true)
       || (text_style & Z_STYLE_FIXED_PITCH) ) {
     if (text_style & Z_STYLE_BOLD) {
       if (text_style & Z_STYLE_ITALIC) {
@@ -628,12 +626,10 @@ static true_type_font *evaluate_font(z_style text_style, z_font font,
 }
 
 
-static void update_window_true_type_font(int window_id,
-    bool force_fixed_pitch) {
+static void update_window_true_type_font(int window_id) {
   z_windows[window_id]->output_true_type_font = evaluate_font(
       z_windows[window_id]->output_text_style,
-      z_windows[window_id]->output_font,
-      force_fixed_pitch);
+      z_windows[window_id]->output_font);
 }
 
 
@@ -649,7 +645,7 @@ static void wordwrap_output_style(void *window_number, uint32_t style_data) {
     z_windows[window_id]->output_text_style = style_data;
   TRACE_LOG("Resulting wordwrap-style:%d.\n",
       z_windows[window_id]->output_text_style);
-  update_window_true_type_font(window_id, false);
+  update_window_true_type_font(window_id);
 }
 
 
@@ -660,7 +656,7 @@ static void wordwrap_output_font(void *window_number, uint32_t font_data) {
   TRACE_LOG("window: %d.\n", window_id);
 
   z_windows[window_id]->output_font = font_data;
-  update_window_true_type_font(window_id, false);
+  update_window_true_type_font(window_id);
 }
 
 
@@ -1242,8 +1238,8 @@ static void z_ucs_output(z_ucs *z_ucs_output) {
   TRACE_LOG("\" to window %d, buffering: %d.\n",
       active_z_window_id,
       active_z_window_id != -1 ? z_windows[active_z_window_id]->buffering : -1);
-  TRACE_LOG("z-mem 0x11 & 2: %d\n", z_mem[0x11] & 2);
 
+  /*
   if (((z_windows[active_z_window_id]->fixedfont_forced_by_flags2 == false)
         && (z_mem[0x11] & 2))
       || ((z_windows[active_z_window_id]->fixedfont_forced_by_flags2 == true)
@@ -1297,6 +1293,7 @@ static void z_ucs_output(z_ucs *z_ucs_output) {
       }
     }
   }
+  */
 
   if (bool_equal(z_windows[active_z_window_id]->buffering, false)) {
     z_ucs_output_window_target(
@@ -1493,7 +1490,6 @@ static void link_interface_to_story(struct z_story *story) {
     z_windows[i]->font_type = Z_FONT_NORMAL;
     z_windows[i]->output_font = Z_FONT_NORMAL;
     z_windows[i]->output_true_type_font = regular_font;
-    z_windows[i]->fixedfont_forced_by_flags2 = z_mem[0x11] & 2 ? true : false;
     z_windows[i]->nof_consecutive_lines_output = 0;
 
     if (i == 0) {
@@ -1820,6 +1816,7 @@ static void set_text_style(z_style text_style) {
   TRACE_LOG("New text style is %d.\n", text_style);
 
   for (i=0; i<nof_active_z_windows; i++) {
+    TRACE_LOG("Evaluating style for window %d.\n", i);
     if (bool_equal(z_windows[i]->buffering, false)) {
       if (text_style & Z_STYLE_NONRESET)
         z_windows[i]->output_text_style |= text_style;
@@ -1827,7 +1824,7 @@ static void set_text_style(z_style text_style) {
         z_windows[i]->output_text_style = text_style;
       TRACE_LOG("Resulting text style is %d.\n",
           z_windows[i]->output_text_style);
-      update_window_true_type_font(i, z_windows[i]->fixedfont_forced_by_flags2);
+      update_window_true_type_font(i);
     }
     else {
       if (text_style & Z_STYLE_NONRESET)
@@ -1837,20 +1834,19 @@ static void set_text_style(z_style text_style) {
       TRACE_LOG("Resulting text style is %d.\n",
           z_windows[i]->current_wrapper_style);
 
+      TRACE_LOG("Evaluating new font for wordwrapper.\n");
       freetype_wordwrap_insert_metadata(
           z_windows[i]->wordwrapper,
           &wordwrap_output_style,
           (void*)(&z_windows[i]->window_number),
-          (uint32_t)(text_style
-            | (z_windows[i]->fixedfont_forced_by_flags2 == true
-              ? Z_STYLE_FIXED_PITCH
-              : 0)),
+          (uint32_t)(text_style),
           evaluate_font(
             z_windows[i]->current_wrapper_style,
-            z_windows[i]->current_wrapper_font,
-            z_windows[i]->fixedfont_forced_by_flags2));
+            z_windows[i]->current_wrapper_font));
+      TRACE_LOG("Finished evaluating new font for wordwrapper.\n");
     }
   }
+  TRACE_LOG("Done evaluating set_text_style in interface.\n");
 }
 
 
@@ -1922,21 +1918,22 @@ static void set_font(z_font font) {
 
   for (i=0; i<nof_active_z_windows; i++) {
 
-    if (bool_equal(z_windows[i]->buffering, false)) {
-      z_windows[i]->output_font = font;
-      update_window_true_type_font(i, z_windows[i]->fixedfont_forced_by_flags2);
-    }
-    else {
-      z_windows[i]->current_wrapper_font = font;
-      freetype_wordwrap_insert_metadata(
-          z_windows[i]->wordwrapper,
-          &wordwrap_output_font,
-          (void*)(&z_windows[i]->window_number),
-          (uint32_t)font,
-          evaluate_font(
-            z_windows[i]->current_wrapper_style,
-            z_windows[i]->current_wrapper_font,
-            z_windows[i]->fixedfont_forced_by_flags2));
+    if (i != 1) {
+      if (bool_equal(z_windows[i]->buffering, false)) {
+        z_windows[i]->output_font = font;
+        update_window_true_type_font(i);
+      }
+      else {
+        z_windows[i]->current_wrapper_font = font;
+        freetype_wordwrap_insert_metadata(
+            z_windows[i]->wordwrapper,
+            &wordwrap_output_font,
+            (void*)(&z_windows[i]->window_number),
+            (uint32_t)font,
+            evaluate_font(
+              z_windows[i]->current_wrapper_style,
+              z_windows[i]->current_wrapper_font));
+      }
     }
   }
 }
@@ -2109,8 +2106,10 @@ static void refresh_input_line(bool display_cursor) {
     switch_to_window(0);
   }
 
+  /*
   printf("refresh: curx:%d, cury:%d\n", 
       *current_input_x, *current_input_y);
+  */
   TRACE_LOG("refresh: curx:%d, cury:%d\n", 
       *current_input_x, *current_input_y);
   z_windows[0]->xcursorpos = *current_input_x - z_windows[0]->xpos
@@ -2267,6 +2266,8 @@ static void refresh_screen() {
   int last_active_z_window_id = -1;
   int y_height_to_fill;
   int saved_padding, last_output_height, nof_paragraphs_to_repeat;
+  int x, y;
+  int xcurs_buf, ycurs_buf, x_width;
 
   if (active_z_window_id != 0) {
     last_active_z_window_id = active_z_window_id;
@@ -2310,6 +2311,7 @@ static void refresh_screen() {
     }
 
     z_windows[0]->xcursorpos = 0;
+    z_windows[0]->last_gylphs_xcursorpos = -1;
     z_windows[0]->rightmost_filled_xpos = z_windows[0]->xcursorpos;
     z_windows[0]->ycursorpos = y_height_to_fill - line_height;
     z_windows[0]->lower_padding =
@@ -2361,6 +2363,26 @@ static void refresh_screen() {
   if (input_line_on_screen == true) {
     *current_input_y = z_windows[0]->ypos + z_windows[0]->ycursorpos;
     refresh_input_line(true);
+  }
+
+  if (last_split_window_size > 0) {
+    //erase_window(1);
+    xcurs_buf = z_windows[1]->xcursorpos;
+    ycurs_buf = z_windows[1]->ycursorpos;
+    z_windows[1]->xcursorpos = 0;
+    z_windows[1]->ycursorpos = 0;
+    x_width = get_screen_width_in_characters();
+    for (y=0; y<last_split_window_size; y++) {
+      for (x=0; x<x_width; x++) {
+        draw_glyph(
+            upper_window_buffer->content[
+            upper_window_buffer->width*y + x].character,
+            1,
+            z_windows[1]->output_true_type_font);
+      }
+    }
+    z_windows[1]->xcursorpos = xcurs_buf;
+    z_windows[1]->ycursorpos = ycurs_buf;
   }
 
   if (ver <= 3)
@@ -2690,7 +2712,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
       }
 
       if (event_type == EVENT_WAS_INPUT) {
-        printf("%c / %d\n", input, input);
+        //printf("%c / %d\n", input, input);
         if (input == Z_UCS_NEWLINE) {
           input_in_progress = false;
         }
@@ -3074,7 +3096,7 @@ static int read_char(uint16_t tenth_seconds, uint32_t verification_routine,
   while (input_in_progress == true)
   {
     event_type = screen_pixel_interface->get_next_event(&input, timeout_millis);
-    printf("event: %d\n", event_type);
+    //printf("event: %d\n", event_type);
 
     if ( (event_type == EVENT_WAS_CODE_PAGE_UP)
         || (event_type == EVENT_WAS_CODE_PAGE_DOWN)) {
@@ -3097,7 +3119,7 @@ static int read_char(uint16_t tenth_seconds, uint32_t verification_routine,
           screen_pixel_interface->redraw_screen_from_scratch();
         }
         else {
-          printf("input:%d\n", input);
+          //printf("input:%d\n", input);
           result = unicode_char_to_zscii_input_char(input);
 
           if (result != 0xff)
@@ -3403,7 +3425,9 @@ void new_pixel_screen_size(int newysize, int newxsize) {
   screen_height_in_pixel = newysize;
   update_fixed_width_char_width();
 
-  fizmo_new_screen_size(screen_width_in_pixel, screen_height_in_pixel);
+  fizmo_new_screen_size(
+      get_screen_width_in_characters(),
+      get_screen_height_in_lines());
 
   printf("new pixel-window-size: %d*%d.\n",
       screen_width_in_pixel, screen_height_in_pixel);
@@ -3455,9 +3479,11 @@ void new_pixel_screen_size(int newysize, int newxsize) {
       }
     }
 
+    /*
     printf("New line length for window %i: %d.\n", i,
         z_windows[i]->xsize - z_windows[i]->rightmargin
         - z_windows[i]->leftmargin);
+    */
     freetype_wordwrap_adjust_line_length(
         z_windows[i]->wordwrapper,
         z_windows[i]->xsize - z_windows[i]->rightmargin

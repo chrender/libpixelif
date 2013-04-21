@@ -41,7 +41,6 @@ struct freetype_wordwrap_metadata {
   void (*metadata_output_function)(void *ptr_parameter, uint32_t int_parameter);
   void *ptr_parameter;
   uint32_t int_parameter;
-  //true_type_font *new_font;
 };
 
 
@@ -59,6 +58,7 @@ typedef struct {
   long current_buffer_index;
   long last_word_end_index; // last word end buffer index
   long last_word_end_advance_position; // right position of last word in line
+  long last_word_end_width_position;
   long current_advance_position;
   long current_width_position;
 } true_type_wordwrapper;

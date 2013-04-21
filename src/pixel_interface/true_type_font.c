@@ -60,7 +60,6 @@ int tt_get_glyph_size(true_type_font *font, z_ucs char_code,
 
   FT_UInt glyph_index;
   FT_GlyphSlot slot;
-  FT_Bitmap bitmap;
   int ft_error;
 
   glyph_index = FT_Get_Char_Index(font->face, char_code);
@@ -71,10 +70,9 @@ int tt_get_glyph_size(true_type_font *font, z_ucs char_code,
       FT_LOAD_DEFAULT);
 
   slot = font->face->glyph;
-  bitmap = slot->bitmap;
 
   *advance = slot->advance.x / 64;
-  *bitmap_width = bitmap.width;
+  *bitmap_width = slot->metrics.width / 64 + slot->metrics.horiBearingX / 64;
 
   return 0;
 }
@@ -136,18 +134,19 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
   }
 
   //printf("x:%d, rev:%d, xspace:%d\n", x, reverse_width, x_max);
-  if (x + reverse_width > x_max) {
-    reverse_width = x_max - left_reverse_x;
+  if (left_reverse_x + reverse_width > x_max) {
+    reverse_width = x_max - left_reverse_x + 1;
   }
 
   /*
-  printf("fill glyph area for %c at %d,%d / %dx%d, max: %d\n",
-      charcode,
+  printf("fill glyph area at %d,%d / %dx%d, max: %d with %d for '%c'\n",
       left_reverse_x,
       y,
       reverse_width,
       font->line_height,
-      x_max);
+      x_max,
+      background_colour,
+      charcode);
   */
   screen_pixel_interface->fill_area(
       left_reverse_x,
@@ -190,6 +189,10 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
 
   start_x = x;
   screen_y = y;
+  /*
+  printf("Glyph display at %03d/%03d, %02d*%02d for char '%c'.\n", x, y,
+      bitmap.width, bitmap.rows, charcode);
+  */
   TRACE_LOG("Glyph display at %d / %d.\n", x, y);
   for (bitmap_y=0; bitmap_y<bitmap.rows; bitmap_y++, screen_y++) {
     screen_x = start_x;
