@@ -143,6 +143,9 @@ true_type_font *create_true_type_font(true_type_factory *factory,
     return NULL;
   }
 
+  //free(stream),
+  //free(openArgs);
+
   result->font_height_in_pixel = pixel_size;
   result->line_height = line_height;
 

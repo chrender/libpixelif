@@ -211,11 +211,14 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
   }
 
   TRACE_LOG("Glyph advance is %d.\n", advance);
+  //FT_Done_Glyph(
   return left_reverse_x + reverse_width;
 }
 
 
-void tt_destroy_font(true_type_font *UNUSED(font)) {
+void tt_destroy_font(true_type_font *font) {
+  FT_Done_Face(font->face);
+  free(font);
 }
 
 
