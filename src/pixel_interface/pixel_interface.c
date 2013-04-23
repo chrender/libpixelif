@@ -120,8 +120,8 @@ static int screen_height_in_pixel = -1;
 static int screen_width_in_pixel = -1;
 static int nof_active_z_windows = 0;
 static int statusline_window_id = -1;
-static int custom_left_margin = 0;
-static int custom_right_margin = 0;
+static int custom_left_margin = 8;
+static int custom_right_margin = 8;
 static bool hyphenation_enabled = true;
 static bool using_colors = false;
 static bool color_disabled = false;
@@ -1010,10 +1010,12 @@ static uint8_t get_screen_height_in_lines() {
 
 
 static uint8_t get_screen_width_in_characters() {
+  /*
   printf("width in chars (%d, %d): %d\n", 
       custom_left_margin, custom_right_margin,
       (screen_width_in_pixel - custom_left_margin - custom_right_margin)
       / fixed_width_char_width);
+  */
   return screen_width_in_pixel / fixed_width_char_width;
 }
 
@@ -1329,7 +1331,7 @@ static void update_fixed_width_char_width() {
   tt_get_glyph_size(
       fixed_regular_font, '0', &fixed_width_char_width, &bitmap_width);
 
-  printf("fixed_width_char_width: %d\n", fixed_width_char_width);
+  //printf("fixed_width_char_width: %d\n", fixed_width_char_width);
 }
 
 
@@ -1486,7 +1488,6 @@ static void link_interface_to_story(struct z_story *story) {
     nof_active_z_windows++;
   }
 
-  printf("link-to-story\n");
   TRACE_LOG("Number of active windows: %d.\n", nof_active_z_windows);
 
   bytes_to_allocate = sizeof(struct z_window*) * nof_active_z_windows;
