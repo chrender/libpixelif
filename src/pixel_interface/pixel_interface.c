@@ -277,6 +277,7 @@ static void clear_to_eol(int window_number) {
 
 
 static void flush_window(int window_number) {
+  TRACE_LOG("flushing window %d\n", window_number);
   freetype_wordwrap_flush_output(z_windows[window_number]->wordwrapper);
   clear_to_eol(window_number);
 }
@@ -1854,6 +1855,9 @@ static void erase_window(int16_t window_number) {
     // (in Versions 5 and later) and selects the lower screen. The same
     // operation should happen at the start of a game (Z-Spec 8.7.3.3).
 
+    TRACE_LOG("erase: %d / %d\n",
+        window_number, z_windows[window_number]->buffering);
+
     if (bool_equal(z_windows[window_number]->buffering, true))
       flush_window(window_number);
 
@@ -1952,13 +1956,14 @@ static void set_colour(z_colour foreground, z_colour background,
     TRACE_LOG("Processing window %d.\n", index);
 
     if (bool_equal(z_windows[index]->buffering, false)) {
+      TRACE_LOG("new output/nonbuffering color(%d): %d/%d.\n",
+          index, foreground, background);
       z_windows[index]->output_foreground_colour = foreground;
       z_windows[index]->output_background_colour = background;
     }
     else {
       TRACE_LOG("new metadata color(%d): %d/%d.\n",
           index, foreground, background);
-
       freetype_wordwrap_insert_metadata(
           z_windows[index]->wordwrapper,
           &wordwrap_output_colour,

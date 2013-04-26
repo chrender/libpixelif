@@ -421,7 +421,8 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
 
 
 void freetype_wordwrap_flush_output(true_type_wordwrapper* wrapper) {
-  if (wrapper->current_buffer_index > 0) {
+  if ( (wrapper->current_buffer_index > 0)
+      || (wrapper->metadata_index > 0) ) {
     process_line_end(wrapper, Z_UCS_NEWLINE, 0);
   }
 }
