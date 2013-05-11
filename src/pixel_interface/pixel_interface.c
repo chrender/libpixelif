@@ -3641,6 +3641,8 @@ void new_pixel_screen_size(int newysize, int newxsize) {
         > z_windows[i]->ysize - z_windows[i]->lower_padding) {
       z_windows[i]->ycursorpos
         = z_windows[i]->ysize - line_height - z_windows[i]->lower_padding;
+      if (z_windows[i]->ycursorpos < 0)
+        z_windows[i]->ycursorpos = 0;
       TRACE_LOG("new ycursorpos[%d]: %d\n", i, z_windows[i]->ycursorpos);
     }
 
