@@ -117,11 +117,12 @@ inline static int ensure_additional_buffer_capacity(
   z_ucs *ptr;
   long new_size;
 
-  TRACE_LOG("new min size: %d, cursize: %d\n",
+  TRACE_LOG("new min size: %d, cursize: %d, buffer at %p\n",
       wrapper->current_buffer_index + size,
-      wrapper->input_buffer_size);
+      wrapper->input_buffer_size,
+      wrapper->input_buffer);
   if (wrapper->current_buffer_index + size > wrapper->input_buffer_size) {
-    new_size = (size - (size % 1024) + 1024);
+    new_size = (size - (size % 1024) + 1024) * sizeof(z_ucs);
     if ((ptr = realloc(wrapper->input_buffer, new_size)) == NULL)
       return -1;
     wrapper->input_buffer = ptr;
@@ -144,7 +145,7 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
   size_t chars_sent;
   z_ucs *ptr;
   int metadata_index = 0;
-  int output_metadata_index, output_index;
+  long output_metadata_index, output_index;
   struct freetype_wordwrap_metadata *metadata_entry;
   int i;
 
@@ -167,13 +168,15 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
 
   output_index = 0;
   while (metadata_index < wrapper->metadata_index) {
+    TRACE_LOG("Found some metadata, starting at metadata index %d of %d.\n",
+        metadata_index, wrapper->metadata_index);
 
     // Look which buffer position is affected by the next metadata entry.
     output_metadata_index =
       wrapper->metadata[metadata_index].output_index;
 
-    TRACE_LOG("mdoutput: mdindex: %d, flushindex: %d\n",
-        output_metadata_index, flush_index);
+    TRACE_LOG("mdoutput: mdindex: %d, flushindex: %d, output_index:%d\n",
+        output_metadata_index, flush_index, output_index);
 
     // In case it's behind the current flush position, there's nothing
     // more to do.
@@ -196,7 +199,24 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
       output_index = output_metadata_index;
     }
 
+    TRACE_LOG("metadata_index: %d,output_index: %d,output_metadata_index:%d\n",
+        metadata_index, output_index, output_metadata_index);
+    TRACE_LOG("wrapper->metadata[%d].output_index: %d\n",
+        metadata_index,
+        wrapper->metadata[metadata_index].output_index);
+    TRACE_LOG("wrapper->metadata_index: %d\n",
+        wrapper->metadata_index);
     // We can now flush all the metadata entries at the current position.
+    if (metadata_index < wrapper->metadata_index) {
+      TRACE_LOG("##1\n");
+    }
+    TRACE_LOG("%d / %d\n",
+        wrapper->metadata[metadata_index].output_index + 1,
+        output_metadata_index + 1);
+    if (wrapper->metadata[metadata_index].output_index
+        == output_metadata_index) {
+      TRACE_LOG("##2\n");
+    }
     while ( (metadata_index < wrapper->metadata_index)
         && (wrapper->metadata[metadata_index].output_index
           == output_metadata_index) ) {
