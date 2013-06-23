@@ -421,8 +421,7 @@ static bool break_line(int window_number) {
     }
     while (event_type == EVENT_WAS_TIMEOUT);
 
-    z_windows[window_number]->xcursorpos
-      = z_windows[window_number]->leftmargin;
+    z_windows[window_number]->xcursorpos = 0;
     //refresh_cursor(window_number);
     //screen_pixel_interface->clear_to_eol();
     screen_pixel_interface->fill_area(
