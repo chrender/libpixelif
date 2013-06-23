@@ -143,18 +143,12 @@ int get_current_pixel_position(true_type_wordwrapper *wrapper) {
 void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
   z_ucs buf;
   size_t chars_sent;
-  z_ucs *ptr;
+  int chars_to_move;
+  //z_ucs *ptr;
   int metadata_index = 0;
   long output_metadata_index, output_index;
   struct freetype_wordwrap_metadata *metadata_entry;
   int i;
-
-  /*
-  for (i=0; i<flush_index; i++) {
-    printf("%c", wrapper->input_buffer[i]);
-  }
-  printf("\n");
-  */
 
   TRACE_LOG("flush on: %c %d \n",
       (char)wrapper->input_buffer[flush_index],
@@ -163,8 +157,8 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
   if (flush_index == -1) {
     flush_index = wrapper->current_buffer_index - 1;
   }
+  // Ensure there's enough space to place a terminating 0.
   ensure_additional_buffer_capacity(wrapper, 1);
-  flush_index++;
 
   output_index = 0;
   while (metadata_index < wrapper->metadata_index) {
@@ -207,16 +201,10 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
     TRACE_LOG("wrapper->metadata_index: %d\n",
         wrapper->metadata_index);
     // We can now flush all the metadata entries at the current position.
-    if (metadata_index < wrapper->metadata_index) {
-      TRACE_LOG("##1\n");
-    }
     TRACE_LOG("%d / %d\n",
         wrapper->metadata[metadata_index].output_index + 1,
         output_metadata_index + 1);
-    if (wrapper->metadata[metadata_index].output_index
-        == output_metadata_index) {
-      TRACE_LOG("##2\n");
-    }
+
     while ( (metadata_index < wrapper->metadata_index)
         && (wrapper->metadata[metadata_index].output_index
           == output_metadata_index) ) {
@@ -245,14 +233,9 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
     wrapper->metadata_index -= metadata_index;
   }
 
-  buf = wrapper->input_buffer[flush_index];
-  TRACE_LOG("0 to %p\n", wrapper->input_buffer + flush_index);
-  wrapper->input_buffer[flush_index] = 0;
-  ptr = wrapper->input_buffer;
-  while (*ptr) {
-    TRACE_LOG("buf: %c %d\n", *ptr, *ptr);
-    ptr++;
-  }
+  buf = wrapper->input_buffer[flush_index+1];
+  TRACE_LOG("0 to %p\n", wrapper->input_buffer + flush_index + 1);
+  wrapper->input_buffer[flush_index + 1] = 0;
   TRACE_LOG("flush-index: %d\n", flush_index);
   TRACE_LOG("flush-line (%d / %p): \"", z_ucs_len(wrapper->input_buffer),
       wrapper->input_buffer);
@@ -261,28 +244,28 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index) {
   wrapper->wrapped_text_output_destination(
       wrapper->input_buffer + output_index,
       wrapper->destination_parameter);
-  wrapper->input_buffer[flush_index] = buf;
+  wrapper->input_buffer[flush_index + 1] = buf;
 
-  chars_sent = flush_index;
-  TRACE_LOG("chars_sent: %ld, dst: %p, src: %p, bufind: %d\n",
+  chars_sent = flush_index + 1;
+  TRACE_LOG("chars_sent: %ld, dst: %p, src: %p, bufindex: %d\n",
       chars_sent,
       wrapper->input_buffer,
       wrapper->input_buffer + flush_index,
       wrapper->current_buffer_index);
-  memmove(
-      wrapper->input_buffer,
-      wrapper->input_buffer + flush_index,
-      chars_sent * sizeof(z_ucs));
+  if ((chars_to_move = wrapper->current_buffer_index - chars_sent) > 0) {
+    memmove(
+        wrapper->input_buffer,
+        wrapper->input_buffer + flush_index + 1,
+        chars_to_move * sizeof(z_ucs));
+  }
   for (i=0; i<wrapper->metadata_index; i++)
     wrapper->metadata[i].output_index -= chars_sent;
 
   wrapper->current_buffer_index -= chars_sent;
-  //wrapper->last_word_end_index = -1;
-  //wrapper->last_word_end_advance_position = -1;
-  //wrapper->current_advance_position = 0; // no need to adjust
 }
 
 
+/*
 static void process_line_end(true_type_wordwrapper *wrapper,
     z_ucs current_char, z_ucs last_char) {
   z_ucs buf_1;
@@ -294,84 +277,23 @@ static void process_line_end(true_type_wordwrapper *wrapper,
       wrapper->last_word_end_width_position,
       wrapper->line_length);
 
+  TRACE_LOG("before flush: width %d, linesize: %d\n",
+      wrapper->current_width_position, wrapper->line_length);
+
   if (wrapper->current_width_position > wrapper->line_length) {
-    TRACE_LOG("Behind past line, match on space|newline, breaking.\n");
-    // In case we exceed the right margin, we have to break the line
-    // before the last word.
-
-    if (wrapper->last_word_end_index < 0) {
-      TRACE_LOG("break at %ld, 1\n", wrapper->current_buffer_index);
-      // If the current line does not contain a single word end, we'll
-      // have to break at the middle of the word.
-      flush_index = wrapper->current_buffer_index;
-      buf_1 = wrapper->input_buffer[flush_index];
-      wrapper->input_buffer[flush_index] = Z_UCS_NEWLINE;
-      flush_line(wrapper, flush_index);
-      wrapper->input_buffer[flush_index] = buf_1;
-      wrapper->current_advance_position = 0;
-      wrapper->current_width_position = 0;
-    }
-    else {
-      // Otherwise, we simply break after the last word.
-      TRACE_LOG("break at %ld, 2\n", wrapper->last_word_end_index + 1);
-      flush_index = wrapper->last_word_end_index;
-
-      wrapper->input_buffer[flush_index] = Z_UCS_NEWLINE;
-      //printf("%ld:", wrapper->last_word_end_width_position);
-
-      flush_line(wrapper, flush_index);
-      //printf("\n");
-
-      wrapper->current_advance_position
-        -= wrapper->last_word_end_advance_position;
-
-      wrapper->current_width_position
-        = wrapper->current_advance_position;
-
-      wrapper->last_word_end_advance_position
-        = wrapper->current_advance_position;
-
-      wrapper->last_word_end_width_position
-        = wrapper->current_width_position;
-
-      wrapper->last_word_end_index
-        = wrapper->current_buffer_index;
-    }
-  }
-
-  if (current_char == Z_UCS_NEWLINE) {
-    TRACE_LOG("Flushing on newline at current position.\n");
-    // In case everything fits into the current line and the current
-    // char is a newline, we can simply flush at the current position.
-    flush_line(
-        wrapper,
-        wrapper->current_buffer_index - 1);
-
-    wrapper->last_word_end_advance_position = 0;
-    wrapper->last_word_end_width_position = 0;
-    wrapper->current_advance_position = 0;
-    wrapper->current_width_position = 0;
-    wrapper->last_word_end_index = -1;
-  }
-  else if ( (current_char == Z_UCS_SPACE) && (last_char != Z_UCS_SPACE) ) {
-    // If we're not past the right margin and the current char is not
-    // a newline, we've encountered a space and a word end.
-    TRACE_LOG("lweap-at-space: %ld\n",
-        wrapper->last_word_end_advance_position);
-    wrapper->last_word_end_advance_position
-      = wrapper->current_advance_position;
-    wrapper->last_word_end_width_position
-      = wrapper->current_width_position;
-    wrapper->last_word_end_index
-      = wrapper->current_buffer_index - 1;
+  else {
+    if (current_char == Z_UCS_NEWLINE) {
   }
 }
+*/
 
 
 void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
   z_ucs *input_index = input;
   z_ucs current_char, last_char; //, char_before_last_char;
   int advance, bitmap_width;
+  z_ucs buf_1;
+  long flush_index;
 
   // In order to build an algorithm most suitable to both enabled and
   // disabled hyphenation, we'll collect input until we'll find the first
@@ -428,10 +350,80 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
       wrapper->current_advance_position += advance;
     }
 
-    // In case we're hitting a space or newline we have to evaluate whether
-    // we're now at a position behind the right margin.
-    if ((current_char == Z_UCS_SPACE) || (current_char == Z_UCS_NEWLINE)) {
-      process_line_end(wrapper, current_char, last_char);
+    TRACE_LOG("check: %d/%d/%d\n", 
+        wrapper->current_advance_position,
+        wrapper->line_length,
+        wrapper->last_word_end_index);
+    // end and are already over the line size.
+    if (current_char == Z_UCS_NEWLINE) {
+      TRACE_LOG("Flushing on newline at current position.\n");
+      // In case everything fits into the current line and the current
+      // char is a newline, we can simply flush at the current position.
+      flush_line(
+          wrapper,
+          wrapper->current_buffer_index - 1);
+
+      wrapper->last_word_end_advance_position = 0;
+      wrapper->last_word_end_width_position = 0;
+      wrapper->current_advance_position = 0;
+      wrapper->current_width_position = 0;
+      wrapper->last_word_end_index = -1;
+    }
+    else if (wrapper->current_advance_position > wrapper->line_length) {
+      TRACE_LOG("Behind past line, match on space|newline, breaking.\n");
+      // In case we exceed the right margin, we have to break the line
+      // before the last word.
+
+      if (wrapper->last_word_end_index < 0) {
+        TRACE_LOG("break at %ld, 1\n", wrapper->current_buffer_index);
+        // If the current line does not contain a single word end, we'll
+        // have to break at the middle of the word.
+        flush_index = wrapper->current_buffer_index;
+        buf_1 = wrapper->input_buffer[flush_index];
+        wrapper->input_buffer[flush_index] = Z_UCS_NEWLINE;
+        flush_line(wrapper, flush_index + 1);
+        wrapper->input_buffer[flush_index] = buf_1;
+        wrapper->current_advance_position = 0;
+        wrapper->current_width_position = 0;
+      }
+      else {
+        // Otherwise, we simply break after the last word.
+        TRACE_LOG("break at %ld, 2\n", wrapper->last_word_end_index + 1);
+        flush_index = wrapper->last_word_end_index;
+
+        buf_1 = wrapper->input_buffer[flush_index];
+        wrapper->input_buffer[flush_index] = Z_UCS_NEWLINE;
+        flush_line(wrapper, flush_index + 1);
+        wrapper->input_buffer[flush_index] = buf_1;
+
+        wrapper->current_advance_position
+          -= wrapper->last_word_end_advance_position;
+
+        wrapper->current_width_position
+          = wrapper->current_advance_position;
+
+        wrapper->last_word_end_advance_position
+          = wrapper->current_advance_position;
+
+        wrapper->last_word_end_width_position
+          = wrapper->current_width_position;
+
+        wrapper->last_word_end_index
+          = -1;
+      }
+
+      TRACE_LOG("after flush: width %d, linesize: %d\n",
+          wrapper->current_width_position, wrapper->line_length);
+    }
+    else if ( (current_char == Z_UCS_SPACE) && (last_char != Z_UCS_SPACE) ) {
+      TRACE_LOG("lweap-at-space: %ld\n",
+          wrapper->last_word_end_advance_position);
+      wrapper->last_word_end_advance_position
+        = wrapper->current_advance_position;
+      wrapper->last_word_end_width_position
+        = wrapper->current_width_position;
+      wrapper->last_word_end_index
+        = wrapper->current_buffer_index - 1;
     }
 
     input_index++;
@@ -443,7 +435,7 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
 void freetype_wordwrap_flush_output(true_type_wordwrapper* wrapper) {
   if ( (wrapper->current_buffer_index > 0)
       || (wrapper->metadata_index > 0) ) {
-    process_line_end(wrapper, Z_UCS_NEWLINE, 0);
+    flush_line(wrapper, -1);
   }
 }
 
@@ -496,8 +488,8 @@ void freetype_wordwrap_insert_metadata(true_type_wordwrapper *wrapper,
       (long int)int_parameter, ptr_parameter);
 
   wrapper->metadata_index++;
-
 }
+
 
 void freetype_wordwrap_adjust_line_length(true_type_wordwrapper *wrapper,
     size_t new_line_length) {
@@ -505,3 +497,4 @@ void freetype_wordwrap_adjust_line_length(true_type_wordwrapper *wrapper,
       new_line_length);
   wrapper->line_length = new_line_length;
 }
+
