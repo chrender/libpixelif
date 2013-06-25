@@ -497,6 +497,11 @@ static int draw_glyph(z_ucs charcode, int window_number,
       z_windows[window_number]->xsize,
       z_windows[window_number]->rightmargin);
 
+  TRACE_LOG(
+      "ycursorpos:%d, ysize:%d\n",
+      z_windows[window_number]->ycursorpos,
+      z_windows[window_number]->ysize);
+
   if (z_windows[window_number]->leftmargin
       + z_windows[window_number]->xcursorpos
       + bitmap_width
@@ -2452,7 +2457,7 @@ static void refresh_screen() {
       // of this.
 
       //printf("last_output_height: %d\n", last_output_height);
-      y_height_to_fill += last_output_height + line_height;
+      y_height_to_fill += last_output_height;
       nof_paragraphs_to_repeat = 2;
     }
 
@@ -3396,24 +3401,25 @@ static void set_cursor(int16_t line, int16_t column, int16_t window_number) {
 
       z_windows[window_number]->ycursorpos
         = pixel_line > (z_windows[window_number]->ysize - line_height)
-        ? z_windows[window_number]->ysize - line_height
+        ? (z_windows[window_number]->ysize - line_height >= 0
+            ? z_windows[window_number]->ysize - line_height
+            : 0)
         : pixel_line;
 
       z_windows[window_number]->xcursorpos
         = pixel_column > z_windows[window_number]->xsize
-        ? z_windows[window_number]->xsize - pixel_column
-        /*
-           ? (z_windows[window_number]->wrapping == false
-           ? z_windows[window_number]->xsize + 1
-           : z_windows[window_number]->xsize)
-           */
+        ? (z_windows[window_number]->xsize - pixel_column > 0
+            ? z_windows[window_number]->xsize - pixel_column
+            : 0)
         : pixel_column;
 
       z_windows[window_number]->last_gylphs_xcursorpos = -1;
       z_windows[window_number]->rightmost_filled_xpos
         = z_windows[window_number]->xcursorpos;
 
-      //refresh_cursor(window_number);
+      TRACE_LOG("New xcursorpos: %d, ycursorpos: %d for window 1.\n", 
+          z_windows[window_number]->xcursorpos,
+          z_windows[window_number]->ycursorpos);
     }
   }
 }
