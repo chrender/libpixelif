@@ -1,3 +1,6 @@
+
+AUTOMAKE_OPTIONS = subdir-objects
+
 AM_CFLAGS = $(libfizmo_CFLAGS) $(freetype2_CFLAGS)
 AM_CPPFLAGS =
 LDADD = $(libfizmo_LIBS) $(freetype2_LIBS)
