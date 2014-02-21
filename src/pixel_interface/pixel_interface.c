@@ -228,8 +228,9 @@ static void refresh_cursor(int UNUSED(window_id)) {
 }
   */
 
+
 static int draw_glyph_string(z_ucs *z_ucs_output, int window_number,
-    true_type_font *font);
+    true_type_font *font, bool *no_more_space);
 
 
 static void clear_to_eol(int window_number) {
@@ -283,8 +284,9 @@ static void flush_window(int window_number) {
 }
 
 
-// Will return true in case winch event was encountered during "more" prompt,
-// false otherwise.
+// Will return true in case break_line was successful and the cursor is now
+// on a fresh line, false otherwise (if, for example, scrolling is disabled
+// and the cursor is on the bottom-right position of the window).
 static bool break_line(int window_number) {
   z_ucs input, event_type;
   int pixels_to_scroll_up, i;
@@ -294,22 +296,27 @@ static bool break_line(int window_number) {
 
   clear_to_eol(window_number);
 
+  // We'll calculate the space we need below the current y_size that we need
+  // for a new line. If this is > 0 we have to scroll.
   pixels_to_scroll_up
     = z_windows[window_number]->ycursorpos + 2*line_height
     + z_windows[window_number]->lower_padding
     - z_windows[window_number]->ysize;
   //printf("pixels to scroll up: %d\n", pixels_to_scroll_up);
 
-  if (window_number == 1) {
+  // 8.6.2 The upper window should never be scrolled: it is legal for
+  // character to be printed on the bottom right position of the upper
+  // window (but the position of the cursor after this operation is
+  // undefined: the author suggests that it stay put).
+  if ( (window_number == 1)
+      || (z_windows[window_number]->scrolling_active == false) ) {
     if (pixels_to_scroll_up <= 0) {
       z_windows[window_number]->ycursorpos += line_height;
       z_windows[window_number]->xcursorpos = 0;
     }
     else {
-      // 8.6.2 The upper window should never be scrolled: it is legal for
-      // character to be printed on the bottom right position of the upper
-      // window (but the position of the cursor after this operation is
-      // undefined: the author suggests that it stay put).
+      TRACE_LOG("Not breaking scrolling-inactive line, returning.\n");
+      return false;
     }
   }
   else {
@@ -402,7 +409,8 @@ static bool break_line(int window_number) {
     draw_glyph_string(
         libpixelif_more_prompt,
         window_number,
-        z_windows[window_number]->output_true_type_font);
+        z_windows[window_number]->output_true_type_font,
+        NULL);
     clear_to_eol(0);
 
     // In case we're just starting the story and there's no status line yet:
@@ -435,13 +443,7 @@ static bool break_line(int window_number) {
     if (event_type == EVENT_WAS_WINCH)
     {
       winch_found = true;
-      // The more prompt was "interrupted" by a window screen size
-      // change. We'll now have to initiate a redraw. Since a redraw
-      // is always based on the history, which is not synced to the
-      // output this function receives, we'll now forget about the
-      // current output and then initiate a redraw from before the
-      // next input.
-      return true;
+      // The more prompt was "interrupted" by a window screen size change.
     }
 
     z_windows[window_number]->nof_consecutive_lines_output = 0;
@@ -456,18 +458,25 @@ static bool break_line(int window_number) {
       line_height,
       z_to_rgb_colour(z_windows[window_number]->output_background_colour));
 
-  return false;
+  return true;
 }
 
 
+// Returns the number of new lines printed, will set *no_more_space to
+// true in case no_more_space!=NULL and no more output can be displayed (e.g.
+// if scrolling_active is false and the cursor is on the window's
+// bottom-right position).
 static int draw_glyph(z_ucs charcode, int window_number,
-    true_type_font *font) {
+    true_type_font *font, bool *no_more_space) {
   int x, y, x_max, advance, bitmap_width, result = 0;
   bool reverse = false;
   z_rgb_colour foreground_colour, background_colour;
 
   if (charcode == Z_UCS_NEWLINE) {
-    break_line(window_number);
+    if (break_line(window_number) == false) {
+      if (no_more_space != NULL)
+        *no_more_space = true;
+    }
     return 1;
   }
 
@@ -507,7 +516,11 @@ static int draw_glyph(z_ucs charcode, int window_number,
       + bitmap_width
       > z_windows[window_number]->xsize
       - z_windows[window_number]->rightmargin) {
-    break_line(window_number);
+    if (break_line(window_number) == false) {
+      if (no_more_space != NULL)
+        *no_more_space = true;
+      return 0;
+    }
     result = 1;
   }
 
@@ -556,8 +569,13 @@ static int draw_glyph(z_ucs charcode, int window_number,
 }
 
 
+// Returns the number of new lines printed, will set *no_more_space to
+// true in case no_more_space!=NULL and no more output can be displayed (e.g.
+// if scrolling_active is false and the cursor is on the window's
+// bottom-right position).
 static int draw_glyph_string(z_ucs *z_ucs_output, int window_number,
-    true_type_font *font) {
+    true_type_font *font, bool *no_more_space) {
+  bool my_no_more_space = false;
   int result = 0;
 
   /*
@@ -571,9 +589,13 @@ static int draw_glyph_string(z_ucs *z_ucs_output, int window_number,
   printf("\n---\n");
   */
 
-  while (*z_ucs_output) {
-    result += draw_glyph(*z_ucs_output, window_number, font);
+  while ((*z_ucs_output) && (my_no_more_space == false)) {
+    result += draw_glyph(*z_ucs_output, window_number, font, &my_no_more_space);
     z_ucs_output++;
+  }
+
+  if ((my_no_more_space == true) && (no_more_space != NULL)) {
+    *no_more_space = true;
   }
 
   return result;
@@ -706,235 +728,8 @@ void z_ucs_output_window_target(z_ucs *z_ucs_output,
   draw_glyph_string(
       z_ucs_output,
       window_number,
-      z_windows[window_number]->output_true_type_font);
-
-  /*
-  z_ucs input, event_type;
-  z_ucs buf = 0; // init to 0 to calm compiler.
-  z_ucs *linebreak;
-  int space_on_line, i;
-
-  if (*z_ucs_output == 0)
-    return;
-
-  update_output_colours(window_number);
-  //refresh_cursor(window_number);
-
-  TRACE_LOG("output-window-target, win %d, %dx%d.\n",
-      window_number,
-      z_windows[window_number]->xsize,
-      z_windows[window_number]->ysize);
-
-  while (*z_ucs_output != 0)
-  {
-    TRACE_LOG("Output queue: \"");
-    TRACE_LOG_Z_UCS(z_ucs_output);
-    TRACE_LOG("\".\n");
-
-    space_on_line = z_windows[window_number]->xsize
-      -  z_windows[window_number]->rightmargin
-      - (z_windows[window_number]->xcursorpos - 1);
-
-    TRACE_LOG("space on line: %d, xcursorpos: %d.\n",
-        space_on_line, z_windows[window_number]->xcursorpos - 1);
-
-    // Find a suitable spot to break the line. Check if data contains some
-    // newline char.
-    linebreak = z_ucs_chr(z_ucs_output, Z_UCS_NEWLINE);
-
-    // In case we cannot put anymore on this line anyway, simple advance
-    // to the next newline or finish output.
-    if ( (space_on_line <= 0)
-        && (z_windows[window_number]->wrapping == false) )
-    {
-      // If wrapping is not allowed and there's either no newline found or
-      // we're at the bottom of the window, simply quit.
-      if ( (linebreak == NULL) 
-          ||
-          (z_windows[window_number]->ycursorpos
-           == z_windows[window_number]->ysize) )
-        return;
-
-      // Else we can advance to the next line.
-      z_ucs_output = linebreak + 1;
-      z_windows[window_number]->xcursorpos
-        = 1 + z_windows[window_number]->leftmargin;
-      z_windows[window_number]->ycursorpos++;
-      continue;
-    }
-
-    if (space_on_line < 0)
-    {
-      // This may happen in case the cursor moved off the right side of
-      // a non-wrapping window.
-      space_on_line = 0;
-    }
-
-    // In case no newline was found or in case the found newline is too far
-    // away to fit on the current line ...
-    if ( (linebreak == NULL) || (linebreak - z_ucs_output > space_on_line) )
-    {
-      // ... test if the rest of the line fits on screen. If it doesn't
-      // we'll put as much on the line as possible and break after that.
-
-      linebreak 
-        = (signed)z_ucs_len(z_ucs_output) > space_on_line
-        ? z_ucs_output + space_on_line
-        : NULL;
-    }
-
-    // Direct output of the current line including the newline char does
-    // not work if margins are used and probably (untested) if a window
-    // is not at the left side.
-
-    // In case we're breaking in the middle of the line, we'll have to
-    // put a '\0' there and store the original data in "buf".
-    if (linebreak != NULL)
-    {
-      TRACE_LOG("linebreak found.\n");
-      buf = *linebreak;
-      *linebreak = 0;
-      TRACE_LOG("buf: %d\n", buf);
-    }
-
-    TRACE_LOG("Output at %d/%d:\"",
-        z_windows[window_number]->xcursorpos,
-        z_windows[window_number]->ycursorpos);
-    //refresh_cursor(window_number);
-    TRACE_LOG_Z_UCS(z_ucs_output);
-
-    TRACE_LOG("\".\n");
-
-    // Output data as far space on the line permits.
-    screen_pixel_interface->z_ucs_output(z_ucs_output);
-    z_windows[window_number]->xcursorpos += z_ucs_len(z_ucs_output);
-
-    if (linebreak != NULL)
-    {
-      // At the end of the line
-      TRACE_LOG("At end of line.\n");
-
-      // At this point we know we've just finalized one line and
-      // have to enter a new one.
-
-      // In order to keep clean margins, remove current style.
-      screen_pixel_interface->set_text_style(0);
-
-      if ( (z_windows[window_number]->ycursorpos
-            == z_windows[window_number]->ysize)
-          && (z_windows[window_number]->wrapping == true) )
-      {
-        // Due to the if clause regarding wrapping above, at this point we
-        // now we're allowed to scroll at the bottom of the window.
-        screen_pixel_interface->copy_area(
-            z_windows[window_number]->ypos,
-            z_windows[window_number]->xpos,
-            z_windows[window_number]->ypos+1,
-            z_windows[window_number]->xpos,
-            z_windows[window_number]->ysize-1,
-            z_windows[window_number]->xsize);
-      }
-      else
-      { 
-        // If we're not at the bottom of the window, simply move to next line.
-        z_windows[window_number]->ycursorpos++;
-      }
-
-      // Clear line, including left margin, to EOL.
-      z_windows[window_number]->xcursorpos = 1;
-      //refresh_cursor(window_number);
-      screen_pixel_interface->clear_to_eol();
-
-      // Move cursor to right margin and re-activate current style setting.
-      z_windows[window_number]->xcursorpos
-        = 1 + z_windows[window_number]->leftmargin;
-      //refresh_cursor(window_number);
-      screen_pixel_interface->set_text_style(
-          z_windows[window_number]->output_text_style);
-
-      // Restore char at linebreak and additionally skip newline if
-      // required.
-      *linebreak = buf;
-      z_ucs_output = linebreak;
-      if (*z_ucs_output == Z_UCS_NEWLINE)
-      {
-        TRACE_LOG("newline-skip.\n");
-        z_ucs_output++;
-      }
-
-      if (z_windows[window_number]->wrapping == true)
-      {
-        z_windows[window_number]->nof_consecutive_lines_output++;
-
-        TRACE_LOG("consecutive lines: %d.\n",
-            z_windows[window_number]->nof_consecutive_lines_output);
-
-        // FIXME: Implement height 255
-        if (
-            (z_windows[window_number]->nof_consecutive_lines_output
-             == z_windows[window_number]->ysize - 1)
-            &&
-            (disable_more_prompt == false)
-            &&
-            (winch_found == false)
-           )
-        {
-          TRACE_LOG("Displaying more prompt.\n");
-
-          // Loop below will result in recursive "z_ucs_output_window_target"
-          // call. Dangerous?
-          for (i=0; i<nof_active_z_windows; i++)
-            if (
-                (i != window_number)
-                &&
-                (bool_equal(z_windows[i]->buffering, true))
-               )
-              flush_window(i);
-
-          screen_pixel_interface->z_ucs_output(libpixelif_more_prompt);
-          screen_pixel_interface->update_screen();
-          //refresh_cursor(window_number);
-
-          // FIXME: Check for sound interrupt?
-          do
-          {
-            event_type = screen_pixel_interface->get_next_event(&input, 0);
-
-            if (event_type == EVENT_WAS_TIMEOUT)
-            {
-              TRACE_LOG("timeout.\n");
-            }
-          }
-          while (event_type == EVENT_WAS_TIMEOUT);
-
-          z_windows[window_number]->xcursorpos
-            = z_windows[window_number]->leftmargin + 1;
-          //refresh_cursor(window_number);
-          screen_pixel_interface->clear_to_eol();
-
-          if (event_type == EVENT_WAS_WINCH)
-          {
-            winch_found = true;
-            // The more prompt was "interrupted" by a window screen size
-            // change. We'll now have to initiate a redraw. Since a redraw
-            // is always based on the history, which is not synced to the
-            // output this function receives, we'll now forget about the
-            // current output and then initiate a redraw from before the
-            // next input.
-            break;
-          }
-
-          z_windows[window_number]->nof_consecutive_lines_output = 0;
-          TRACE_LOG("more prompt finished: %d.\n", event_type);
-        }
-      }
-    }
-    else
-      z_ucs_output += z_ucs_len(z_ucs_output);
-  }
-
-  TRACE_LOG("z_ucs_output_window_target finished.\n");
-  */
+      z_windows[window_number]->output_true_type_font,
+      NULL);
 }
 
 
@@ -1547,6 +1342,7 @@ static void link_interface_to_story(struct z_story *story) {
       else if (i == statusline_window_id) {
         z_windows[i]->ysize = line_height;
         z_windows[i]->xsize = screen_width_in_pixel;
+        z_windows[i]->scrolling_active = false;
         //z_windows[i]->text_style = Z_STYLE_REVERSE_VIDEO;
         //z_windows[i]->output_text_style = Z_STYLE_REVERSE_VIDEO;
       }
@@ -2204,7 +2000,7 @@ static void refresh_input_line(bool display_cursor) {
 
   clear_input_line();
 
-  nof_line_breaks = draw_glyph_string(current_input_buffer, 0, bold_font);
+  nof_line_breaks = draw_glyph_string(current_input_buffer, 0, bold_font, NULL);
   TRACE_LOG("nof_line_breaks: %d\n", nof_line_breaks);
   TRACE_LOG("current_input_y: %d\n", *current_input_y);
   nof_new_input_lines = nof_line_breaks - (nof_input_lines - 1);
@@ -2399,7 +2195,8 @@ static void refresh_upper_window() {
             upper_window_buffer->content[
             upper_window_buffer->width*y + x].character,
             1,
-            z_windows[1]->output_true_type_font);
+            z_windows[1]->output_true_type_font,
+            NULL);
       }
     }
     z_windows[1]->xcursorpos = xcurs_buf;
@@ -2444,7 +2241,7 @@ static void refresh_screen() {
 
   y_height_to_fill = z_windows[0]->ysize - z_windows[0]->lower_padding;
   saved_padding = z_windows[0]->lower_padding;
-  while (output_rewind_paragraph(history) == 0) {
+  while (output_rewind_paragraph(history, NULL) == 0) {
     if (y_height_to_fill < 1)
       break;
 
@@ -2701,7 +2498,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
       // we're only evaluating the last paragraph, no newlines can occur
       // in the repeated output.
 
-      if (output_rewind_paragraph(preload_history) < 0) {
+      if (output_rewind_paragraph(preload_history, NULL) < 0) {
         printf("err\n");
       }
       output_repeat_paragraphs(preload_history, 1, false, false);

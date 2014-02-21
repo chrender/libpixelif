@@ -88,7 +88,7 @@ true_type_font *create_true_type_font(true_type_factory *factory,
   if (factory->font_search_path == NULL)
     return NULL;
 
-  TRACE_LOG("Loading font %s\n");
+  TRACE_LOG("Loading font %s\n", font_filename);
   path_copy = strdup(factory->font_search_path);
   token = strtok(path_copy, ":");
   fontfile = NULL;
