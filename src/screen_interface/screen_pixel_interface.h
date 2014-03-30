@@ -80,6 +80,7 @@ struct z_screen_pixel_interface
   void (*set_cursor_visibility)(bool visible);
   z_colour (*get_default_foreground_colour)();
   z_colour (*get_default_background_colour)();
+  int (*console_output)(z_ucs *output);
 };
 
 #endif /* screen_pixel_interface_h_INCLUDED */

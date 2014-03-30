@@ -1111,7 +1111,10 @@ static void z_ucs_output(z_ucs *z_ucs_output) {
   }
   */
 
-  if (bool_equal(z_windows[active_z_window_id]->buffering, false)) {
+  if (interface_open != true) {
+    screen_pixel_interface->console_output(z_ucs_output);
+  }
+  else if (bool_equal(z_windows[active_z_window_id]->buffering, false)) {
     z_ucs_output_window_target(
         z_ucs_output,
         (void*)(&z_windows[active_z_window_id]->window_number));
@@ -1541,24 +1544,6 @@ static int pixel_close_interface(z_ucs *error_message) {
 
   interface_open = false;
   return 0;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }
 
 
