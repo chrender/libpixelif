@@ -3,7 +3,7 @@
  *
  * This file is part of fizmo.
  *
- * Copyright (c) 2011-2012 Christoph Ender.
+ * Copyright (c) 2011-2014 Christoph Ender.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -16,7 +16,7 @@
  *    documentation and/or other materials provided with the distribution.
  * 3. The name of the author may not be used to endorse or promote products
  *    derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
@@ -63,7 +63,7 @@
 #include "../locales/libpixelif_locales.h"
 
 #define Z_STYLE_NONRESET (Z_STYLE_REVERSE_VIDEO | Z_STYLE_BOLD | Z_STYLE_ITALIC)
- 
+
 // 8.8.1
 // The display is an array of pixels. Coordinates are usually given (in units)
 // in the form (y,x), with (1,1) in the top left.
@@ -129,7 +129,7 @@ static bool disable_more_prompt = false;
 static z_ucs *libpixelif_more_prompt;
 static z_ucs *libpixelif_score_string;
 static z_ucs *libpixelif_turns_string;
-static int libpixelif_right_status_min_size;
+//static int libpixelif_right_status_min_size;
 static int active_z_window_id = -1;
 //static true_type_wordwrapper *refresh_wordwrapper;
 //static int refresh_newline_counter;
@@ -213,20 +213,6 @@ static char *config_option_names[] = {
   "fixed-regular-font", "fixed-italic-font", "fixed-bold-font",
   "fixed-bold-italic-font",
   "font-search-path", "font-size", NULL };
-
-
-  /*
-static void refresh_cursor(int UNUSED(window_id)) {
-  TRACE_LOG("refresh_cursor for win %d:%d/%d/%d/%d\n",
-      window_id,
-      z_windows[window_id]->ypos, z_windows[window_id]->ycursorpos,
-      z_windows[window_id]->xpos, z_windows[window_id]->xcursorpos);
-
-  screen_pixel_interface->goto_yx(
-      z_windows[window_id]->ypos + z_windows[window_id]->ycursorpos - 1,
-      z_windows[window_id]->xpos + z_windows[window_id]->xcursorpos - 1);
-}
-  */
 
 
 static int draw_glyph_string(z_ucs *z_ucs_output, int window_number,
@@ -462,6 +448,33 @@ static bool break_line(int window_number) {
 }
 
 
+static int get_glyph_string_size(z_ucs *string_to_measure,
+    true_type_font *font) {
+  // Measuring string width works by adding up all "advance" values except
+  // for the last char, which has it's bitmap_width added instead.
+  int advance = 0;
+  int bitmap_width = 0;
+  int result = 0;
+
+  while (*string_to_measure != 0) {
+    // We've found the next char to measure, so we know we have to add
+    // the last char's advance value.
+    result += advance;
+
+    // Measure current glyph.
+    tt_get_glyph_size(font, *string_to_measure, &advance, &bitmap_width);
+
+    // Advance to next position.
+    string_to_measure++;
+  }
+
+  // At the end of the string, we're adding the last char's bitmap_width.
+  result += bitmap_width;
+
+  return result;
+}
+
+
 // Returns the number of new lines printed, will set *no_more_space to
 // true in case no_more_space!=NULL and no more output can be displayed (e.g.
 // if scrolling_active is false and the cursor is on the window's
@@ -494,6 +507,12 @@ static int draw_glyph(z_ucs charcode, int window_number,
 
   //advance = tt_get_glyph_advance(font, charcode, 0);
   tt_get_glyph_size(font, charcode, &advance, &bitmap_width);
+
+  // We're getting two separate values here: "bitmap_width" denotes the actual
+  // size of the glyph (so we can know if it still fits on the current line),
+  // "advance" tells how far the cursor should be advanced. Both values
+  // don't have to be the same, for some glyphs and especialls for italic
+  // fonts the cursor may stay inside the glyph.
 
   TRACE_LOG("Max draw glyph size: %d.\n",
       z_windows[window_number]->xsize - z_windows[window_number]->rightmargin);
@@ -811,7 +830,7 @@ static uint8_t get_screen_height_in_lines() {
 
 static uint8_t get_screen_width_in_characters() {
   /*
-  printf("width in chars (%d, %d): %d\n", 
+  printf("width in chars (%d, %d): %d\n",
       custom_left_margin, custom_right_margin,
       (screen_width_in_pixel - custom_left_margin - custom_right_margin)
       / fixed_width_char_width);
@@ -1371,6 +1390,11 @@ static void link_interface_to_story(struct z_story *story) {
       z_windows[i]->output_background_colour = Z_COLOUR_BLACK;
       z_windows[i]->foreground_colour = Z_COLOUR_WHITE;
       z_windows[i]->output_foreground_colour = Z_COLOUR_WHITE;
+      z_windows[i]->text_style = Z_STYLE_BOLD;
+      z_windows[i]->output_text_style = Z_STYLE_BOLD;
+      z_windows[i]->font_type = Z_FONT_NORMAL;
+      z_windows[i]->output_font = Z_FONT_NORMAL;
+      z_windows[i]->output_true_type_font = bold_font;
     }
     else {
       z_windows[i]->foreground_colour = default_foreground_colour;
@@ -1448,11 +1472,13 @@ static void link_interface_to_story(struct z_story *story) {
         libpixelif_module_name,
         i18n_libpixelif_TURNS);
 
+  /*
   //  -> "Score: x  Turns: x ",
   libpixelif_right_status_min_size
     = z_ucs_len(libpixelif_score_string)
     + z_ucs_len(libpixelif_turns_string)
     + 9; // 5 Spaces, 2 colons, 2 digits.
+  */
 
   //refresh_cursor(active_z_window_id);
 
@@ -1736,7 +1762,7 @@ static void set_colour(z_colour foreground, z_colour background,
   }
   else
     return;
-   
+
   while (index <= end_index) {
     TRACE_LOG("Processing window %d.\n", index);
 
@@ -1966,10 +1992,10 @@ static void refresh_input_line(bool display_cursor) {
   }
 
   /*
-  printf("refresh: curx:%d, cury:%d\n", 
+  printf("refresh: curx:%d, cury:%d\n",
       *current_input_x, *current_input_y);
   */
-  TRACE_LOG("refresh: curx:%d, cury:%d\n", 
+  TRACE_LOG("refresh: curx:%d, cury:%d\n",
       *current_input_x, *current_input_y);
   z_windows[0]->xcursorpos = *current_input_x - z_windows[0]->xpos
     - z_windows[0]->leftmargin;
@@ -2006,25 +2032,26 @@ static void refresh_input_line(bool display_cursor) {
 }
 
 
+/*
 static int number_length(int number) {
   if (number == 0)
     return 1;
   else
     return ((int)log10(abs(number))) + (number < 0 ? 1 : 0) + 1;
 }
+*/
 
 
 static void show_status(z_ucs *room_description, int status_line_mode,
     int16_t parameter1, int16_t parameter2) {
-  int desc_len = z_ucs_len(room_description);
-  int score_length, turn_length, rightside_length, room_desc_space;
-  z_ucs rightside_buf_zucs[libpixelif_right_status_min_size + 12];
+  int rightside_char_length, rightside_pixel_length, room_desc_space;
+  static int rightside_buf_zucs_len = 0;
+  static z_ucs *rightside_buf_zucs = NULL;
   z_ucs buf = 0;
   z_ucs *ptr;
-  char latin1_buf[8];
+  static char latin1_buf1[8];
+  static char latin1_buf2[8];
   int last_active_z_window_id;
-  //int i;
-  //z_ucs *ptr2;
 
   TRACE_LOG("statusline: \"");
   TRACE_LOG_Z_UCS(room_description);
@@ -2044,77 +2071,80 @@ static void show_status(z_ucs *room_description, int status_line_mode,
     switch_to_window(statusline_window_id);
     erase_window(statusline_window_id);
 
+    z_windows[statusline_window_id]->xcursorpos = 5;
+    z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
+    z_windows[statusline_window_id]->rightmost_filled_xpos
+      = z_windows[statusline_window_id]->xcursorpos;
+    z_ucs_output(room_description);
+
     if (status_line_mode == SCORE_MODE_SCORE_AND_TURN) {
-      score_length = number_length(parameter1);
-      turn_length = number_length(parameter2);
+      // 8.2.3.1: The score may be assumed to be in the range -99 to 999
+      // inclusive, and the turn number in the range 0 to 9999.
 
-      rightside_length
-        = libpixelif_right_status_min_size - 2 + score_length + turn_length;
+      sprintf(latin1_buf1, ": %d  ", parameter1);
+      sprintf(latin1_buf2, ": %d", parameter2);
 
-      room_desc_space
-        = z_windows[statusline_window_id]->xsize - rightside_length - 3;
+      rightside_char_length
+        = z_ucs_len(libpixelif_score_string)
+        + strlen(latin1_buf1)
+        + z_ucs_len(libpixelif_turns_string)
+        + strlen(latin1_buf2);
 
-      if (room_desc_space < desc_len) {
-        buf = room_description[room_desc_space];
-        room_description[room_desc_space] = 0;
+      if (rightside_buf_zucs_len < rightside_char_length) {
+        // Allocate a little more so we should be done with one allocation
+        // for the game.
+        rightside_buf_zucs_len = rightside_char_length + 10;
+        TRACE_LOG("Allocating %d bytes for rightside_buf_zucs_len.\n",
+            rightside_buf_zucs_len);
+        rightside_buf_zucs
+          = (z_ucs*)fizmo_realloc(
+              rightside_buf_zucs,
+              rightside_buf_zucs_len * sizeof(z_ucs));
       }
-
-      z_windows[statusline_window_id]->xcursorpos = 2;
-      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
-      z_windows[statusline_window_id]->rightmost_filled_xpos
-        = z_windows[statusline_window_id]->xcursorpos;
-      //refresh_cursor(statusline_window_id);
-      z_ucs_output(room_description);
-
-      z_windows[statusline_window_id]->xcursorpos
-        = z_windows[statusline_window_id]->xsize - rightside_length + 1;
-      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
-      z_windows[statusline_window_id]->rightmost_filled_xpos
-        = z_windows[statusline_window_id]->xcursorpos;
-      //refresh_cursor(statusline_window_id);
 
       ptr = z_ucs_cpy(rightside_buf_zucs, libpixelif_score_string);
-      sprintf(latin1_buf, ": %d  ", parameter1);
-      ptr = z_ucs_cat_latin1(ptr, latin1_buf);
+      ptr = z_ucs_cat_latin1(ptr, latin1_buf1);
       ptr = z_ucs_cat(ptr, libpixelif_turns_string);
-      sprintf(latin1_buf, ": %d", parameter2);
-      ptr = z_ucs_cat_latin1(ptr, latin1_buf);
-
-      z_ucs_output(rightside_buf_zucs);
-
-      if (buf != 0)
-        room_description[room_desc_space] = buf;
+      ptr = z_ucs_cat_latin1(ptr, latin1_buf2);
     }
     else if (status_line_mode == SCORE_MODE_TIME) {
-      // FIXME:
-      room_desc_space = z_windows[statusline_window_id]->xsize - 8;
+      sprintf(latin1_buf1, "%02d:%02d", parameter1, parameter2);
 
-      if (room_desc_space < desc_len) {
-        buf = room_description[room_desc_space];
-        room_description[room_desc_space] = 0;
+      rightside_char_length = strlen(latin1_buf1);
+
+      if (rightside_buf_zucs_len < rightside_char_length) {
+        // Allocate a little more so we should be done with one allocation
+        // for the game.
+        rightside_buf_zucs_len = rightside_char_length + 10;
+        TRACE_LOG("Allocating %d bytes for rightside_buf_zucs_len.\n",
+            rightside_buf_zucs_len);
+        rightside_buf_zucs
+          = (z_ucs*)fizmo_realloc(
+              rightside_buf_zucs,
+              rightside_buf_zucs_len * sizeof(z_ucs));
       }
 
-      z_windows[statusline_window_id]->xcursorpos = 2;
-      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
-      z_windows[statusline_window_id]->rightmost_filled_xpos
-        = z_windows[statusline_window_id]->xcursorpos;
-      //refresh_cursor(statusline_window_id);
-      z_ucs_output(room_description);
-
-      z_windows[statusline_window_id]->xcursorpos
-        = z_windows[statusline_window_id]->xsize - 100;
-      z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
-      z_windows[statusline_window_id]->rightmost_filled_xpos
-        = z_windows[statusline_window_id]->xcursorpos;
-      //refresh_cursor(statusline_window_id);
-
-      sprintf(latin1_buf, "%02d:%02d", parameter1, parameter2);
-      latin1_string_to_zucs_string(rightside_buf_zucs, latin1_buf, 8);
-      z_ucs_output(rightside_buf_zucs);
-
-      if (buf != 0)
-        room_description[room_desc_space] = buf;
+      latin1_string_to_zucs_string(rightside_buf_zucs, latin1_buf1, 8);
     }
+    else {
+      // Neither SCORE_MODE_SCORE_AND_TURN nor SCORE_MODE_TIME.
+    }
+
+    rightside_pixel_length
+      = get_glyph_string_size(
+          rightside_buf_zucs,
+          z_windows[statusline_window_id]->output_true_type_font);
+
+    z_windows[statusline_window_id]->xcursorpos
+      = z_windows[statusline_window_id]->xsize
+      - 5 // padding to right screen size
+      - rightside_pixel_length
+      - 5; // padding left of score/turn/time string.
+    z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
+    z_windows[statusline_window_id]->rightmost_filled_xpos
+      = z_windows[statusline_window_id]->xcursorpos;
+    clear_to_eol(statusline_window_id);
+    z_ucs_output(rightside_buf_zucs);
 
     switch_to_window(last_active_z_window_id);
   }
@@ -2329,7 +2359,7 @@ void preload_wrap_zucs_output(z_ucs *UNUSED(z_ucs_output),
 // terminated with a newline (in order to conform to V5+ games).
 // Returns -1 when int routine returns != 0
 // Returns -2 when user ended input with ESC
-// 
+//
 // Input concept for pixel-interface:
 // In case the user's input doesn't fit on a single line, text is scrolled
 // upewards and input continues on the next line. The whole user input has
@@ -2970,7 +3000,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
     TRACE_LOG("converting:%c\n", input_buffer[i]);
     dest[i] = unicode_char_to_zscii_input_char(input_buffer[i]);
   }
-                                   
+
   TRACE_LOG("len:%d\n", input_size);
   TRACE_LOG("after-readline-ycursorpos: %d.\n", z_windows[0]->ycursorpos);
   return input_size;
@@ -3176,7 +3206,7 @@ static void set_cursor(int16_t line, int16_t column, int16_t window_number) {
         line, column, window_number, z_windows[window_number]->ysize);
 
     // 8.7.2.3: When the upper window is selected, its cursor position can
-    // be moved with set_cursor. 
+    // be moved with set_cursor.
     if (window_number == 1) {
       pixel_line = line * line_height;
       pixel_column = column * fixed_width_char_width;
@@ -3199,7 +3229,7 @@ static void set_cursor(int16_t line, int16_t column, int16_t window_number) {
       z_windows[window_number]->rightmost_filled_xpos
         = z_windows[window_number]->xcursorpos;
 
-      TRACE_LOG("New xcursorpos: %d, ycursorpos: %d for window 1.\n", 
+      TRACE_LOG("New xcursorpos: %d, ycursorpos: %d for window 1.\n",
           z_windows[window_number]->xcursorpos,
           z_windows[window_number]->ycursorpos);
     }
@@ -3249,7 +3279,7 @@ static void game_was_restored_and_history_modified() {
   if (interface_open == true) {
     refresh_screen();
     //screen_pixel_interface->update_screen();
-  } 
+  }
 }
 
 
