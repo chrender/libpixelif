@@ -122,6 +122,8 @@ static int nof_active_z_windows = 0;
 static int statusline_window_id = -1;
 static int custom_left_margin = 8;
 static int custom_right_margin = 8;
+static int v3_status_bar_left_margin = 5;
+static int v3_status_bar_right_margin = 5;
 static bool hyphenation_enabled = true;
 static bool using_colors = false;
 static bool color_disabled = false;
@@ -129,6 +131,7 @@ static bool disable_more_prompt = false;
 static z_ucs *libpixelif_more_prompt;
 static z_ucs *libpixelif_score_string;
 static z_ucs *libpixelif_turns_string;
+static z_ucs space_string[] = { Z_UCS_SPACE, 0 };
 //static int libpixelif_right_status_min_size;
 static int active_z_window_id = -1;
 //static true_type_wordwrapper *refresh_wordwrapper;
@@ -504,6 +507,8 @@ static int draw_glyph(z_ucs charcode, int window_number,
 
   if (z_windows[window_number]->output_text_style & Z_STYLE_REVERSE_VIDEO)
     reverse = true;
+
+  TRACE_LOG("reverse[%d] = %d.\n", window_number, reverse);
 
   //advance = tt_get_glyph_advance(font, charcode, 0);
   tt_get_glyph_size(font, charcode, &advance, &bitmap_width);
@@ -1157,6 +1162,43 @@ static void update_fixed_width_char_width() {
 }
 
 
+static void erase_window(int16_t window_number) {
+  if ( (window_number >= 0)
+      && (window_number <=
+        nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0))) {
+    // Erasing window -1 clears the whole screen to the background colour of
+    // the lower screen, collapses the upper window to height 0, moves the
+    // cursor of the lower screen to bottom left (in Version 4) or top left
+    // (in Versions 5 and later) and selects the lower screen. The same
+    // operation should happen at the start of a game (Z-Spec 8.7.3.3).
+
+    TRACE_LOG("erase: %d / %d\n",
+        window_number, z_windows[window_number]->buffering);
+
+    if (bool_equal(z_windows[window_number]->buffering, true))
+      flush_window(window_number);
+
+    screen_pixel_interface->fill_area(
+        z_windows[window_number]->xpos,
+        z_windows[window_number]->ypos,
+        z_windows[window_number]->xsize,
+        z_windows[window_number]->ysize,
+        z_to_rgb_colour(z_windows[window_number]->output_background_colour));
+
+    z_windows[window_number]->xcursorpos
+      = z_windows[window_number]->leftmargin;
+    z_windows[window_number]->last_gylphs_xcursorpos
+      = -1;
+    z_windows[window_number]->rightmost_filled_xpos
+      = z_windows[window_number]->xcursorpos;
+    z_windows[window_number]->ycursorpos
+      = (ver >= 5 ? 0 : (z_windows[window_number]->ysize - line_height));
+
+    z_windows[window_number]->nof_consecutive_lines_output = 0;
+  }
+}
+
+
 static void link_interface_to_story(struct z_story *story) {
   int bytes_to_allocate;
   int len;
@@ -1374,24 +1416,18 @@ static void link_interface_to_story(struct z_story *story) {
       }
     }
 
-    z_windows[i]->ycursorpos
-      = (ver >= 5 ? 0 : (z_windows[i]->ysize - line_height - 4));
-    z_windows[i]->xcursorpos = 0;
-    z_windows[i]->last_gylphs_xcursorpos = -1;
-    z_windows[i]->rightmost_filled_xpos
-      = z_windows[i]->xcursorpos;
     z_windows[i]->lower_padding = 4;
 
     z_windows[i]->newline_routine = 0;
     z_windows[i]->interrupt_countdown = 0;
 
     if (i == statusline_window_id) {
-      z_windows[i]->background_colour = Z_COLOUR_BLACK;
-      z_windows[i]->output_background_colour = Z_COLOUR_BLACK;
-      z_windows[i]->foreground_colour = Z_COLOUR_WHITE;
-      z_windows[i]->output_foreground_colour = Z_COLOUR_WHITE;
-      z_windows[i]->text_style = Z_STYLE_BOLD;
-      z_windows[i]->output_text_style = Z_STYLE_BOLD;
+      z_windows[i]->background_colour = default_background_colour;
+      z_windows[i]->output_background_colour = default_background_colour;
+      z_windows[i]->foreground_colour = default_foreground_colour;
+      z_windows[i]->output_foreground_colour = default_foreground_colour;
+      z_windows[i]->text_style = Z_STYLE_REVERSE_VIDEO;
+      z_windows[i]->output_text_style = Z_STYLE_REVERSE_VIDEO;
       z_windows[i]->font_type = Z_FONT_NORMAL;
       z_windows[i]->output_font = Z_FONT_NORMAL;
       z_windows[i]->output_true_type_font = bold_font;
@@ -1420,6 +1456,15 @@ static void link_interface_to_story(struct z_story *story) {
       z_windows[i]->current_wrapper_style = z_windows[i]->text_style;
       z_windows[i]->current_wrapper_font = z_windows[i]->font_type;
     }
+
+    erase_window(i);
+
+    z_windows[i]->ycursorpos
+      = (ver >= 5 ? 0 : (z_windows[i]->ysize - line_height - 4));
+    z_windows[i]->xcursorpos = 0;
+    z_windows[i]->last_gylphs_xcursorpos = -1;
+    z_windows[i]->rightmost_filled_xpos
+      = z_windows[i]->xcursorpos;
   }
 
   active_z_window_id = 0;
@@ -1652,43 +1697,6 @@ static void split_window(int16_t nof_lines) {
     }
 
     last_split_window_size = nof_lines;
-  }
-}
-
-
-static void erase_window(int16_t window_number) {
-  if ( (window_number >= 0)
-      && (window_number <=
-        nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0))) {
-    // Erasing window -1 clears the whole screen to the background colour of
-    // the lower screen, collapses the upper window to height 0, moves the
-    // cursor of the lower screen to bottom left (in Version 4) or top left
-    // (in Versions 5 and later) and selects the lower screen. The same
-    // operation should happen at the start of a game (Z-Spec 8.7.3.3).
-
-    TRACE_LOG("erase: %d / %d\n",
-        window_number, z_windows[window_number]->buffering);
-
-    if (bool_equal(z_windows[window_number]->buffering, true))
-      flush_window(window_number);
-
-    screen_pixel_interface->fill_area(
-        z_windows[window_number]->xpos,
-        z_windows[window_number]->ypos,
-        z_windows[window_number]->xsize,
-        z_windows[window_number]->ysize,
-        z_to_rgb_colour(z_windows[window_number]->output_background_colour));
-
-    z_windows[window_number]->xcursorpos
-      = z_windows[window_number]->leftmargin;
-    z_windows[window_number]->last_gylphs_xcursorpos
-      = -1;
-    z_windows[window_number]->rightmost_filled_xpos
-      = z_windows[window_number]->xcursorpos;
-    z_windows[window_number]->ycursorpos
-      = (ver >= 5 ? 0 : (z_windows[window_number]->ysize - line_height));
-
-    z_windows[window_number]->nof_consecutive_lines_output = 0;
   }
 }
 
@@ -2044,7 +2052,8 @@ static int number_length(int number) {
 
 static void show_status(z_ucs *room_description, int status_line_mode,
     int16_t parameter1, int16_t parameter2) {
-  int rightside_char_length, rightside_pixel_length, room_desc_space;
+  int rightside_char_length, rightside_pixel_length, right_pos;
+  int room_desc_space;
   static int rightside_buf_zucs_len = 0;
   static z_ucs *rightside_buf_zucs = NULL;
   z_ucs buf = 0;
@@ -2061,20 +2070,26 @@ static void show_status(z_ucs *room_description, int status_line_mode,
       z_windows[statusline_window_id]->xsize, screen_width_in_pixel);
 
   if (statusline_window_id > 0) {
+    last_active_z_window_id = active_z_window_id;
+    switch_to_window(statusline_window_id);
+    erase_window(statusline_window_id);
+
     z_windows[statusline_window_id]->ycursorpos = 0;
     z_windows[statusline_window_id]->xcursorpos = 0;
     z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
     z_windows[statusline_window_id]->rightmost_filled_xpos
       = z_windows[statusline_window_id]->xcursorpos;
 
-    last_active_z_window_id = active_z_window_id;
-    switch_to_window(statusline_window_id);
-    erase_window(statusline_window_id);
+    while (z_windows[statusline_window_id]->xcursorpos
+        < v3_status_bar_left_margin) {
+      z_ucs_output(space_string);
+    }
 
-    z_windows[statusline_window_id]->xcursorpos = 5;
+    z_windows[statusline_window_id]->xcursorpos = v3_status_bar_left_margin;
     z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
     z_windows[statusline_window_id]->rightmost_filled_xpos
       = z_windows[statusline_window_id]->xcursorpos;
+
     z_ucs_output(room_description);
 
     if (status_line_mode == SCORE_MODE_SCORE_AND_TURN) {
@@ -2135,16 +2150,26 @@ static void show_status(z_ucs *room_description, int status_line_mode,
           rightside_buf_zucs,
           z_windows[statusline_window_id]->output_true_type_font);
 
-    z_windows[statusline_window_id]->xcursorpos
+    right_pos
       = z_windows[statusline_window_id]->xsize
-      - 5 // padding to right screen size
+      - v3_status_bar_left_margin
       - rightside_pixel_length
       - 5; // padding left of score/turn/time string.
+
+    while (z_windows[statusline_window_id]->xcursorpos < right_pos) {
+      z_ucs_output(space_string);
+    }
+
+    z_windows[statusline_window_id]->xcursorpos = right_pos;
     z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
     z_windows[statusline_window_id]->rightmost_filled_xpos
       = z_windows[statusline_window_id]->xcursorpos;
-    clear_to_eol(statusline_window_id);
     z_ucs_output(rightside_buf_zucs);
+
+    while (z_windows[statusline_window_id]->xcursorpos
+        < z_windows[statusline_window_id]->xsize) {
+      z_ucs_output(space_string);
+    }
 
     switch_to_window(last_active_z_window_id);
   }
