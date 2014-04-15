@@ -124,6 +124,7 @@ static int custom_left_margin = 8;
 static int custom_right_margin = 8;
 static int v3_status_bar_left_margin = 5;
 static int v3_status_bar_right_margin = 5;
+static int v3_status_bar_left_scoreturntime_margin= 5;
 static bool hyphenation_enabled = true;
 static bool using_colors = false;
 static bool color_disabled = false;
@@ -487,6 +488,9 @@ static int draw_glyph(z_ucs charcode, int window_number,
   int x, y, x_max, advance, bitmap_width, result = 0;
   bool reverse = false;
   z_rgb_colour foreground_colour, background_colour;
+
+  TRACE_LOG("statusline_window style: %d.\n",
+      z_windows[statusline_window_id]->output_text_style);
 
   if (charcode == Z_UCS_NEWLINE) {
     if (break_line(window_number) == false) {
@@ -1707,7 +1711,7 @@ static void set_text_style(z_style text_style) {
   //printf("New text style is %d.\n", text_style);
   TRACE_LOG("New text style is %d.\n", text_style);
 
-  for (i=0; i<nof_active_z_windows; i++) {
+  for (i=0; i<nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0); i++) {
     TRACE_LOG("Evaluating style for window %d.\n", i);
     if (bool_equal(z_windows[i]->buffering, false)) {
       if (text_style & Z_STYLE_NONRESET)
@@ -1809,7 +1813,7 @@ static void set_font(z_font font) {
 
   TRACE_LOG("New font is %d.\n", font);
 
-  for (i=0; i<nof_active_z_windows; i++) {
+  for (i=0; i<nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0); i++) {
 
     if (i != 1) {
       if (bool_equal(z_windows[i]->buffering, false)) {
@@ -2035,19 +2039,10 @@ static void refresh_input_line(bool display_cursor) {
     draw_cursor();
   }
 
-  if (last_active_z_window_id != -1)
+  if (last_active_z_window_id != -1) {
     switch_to_window(last_active_z_window_id);
+  }
 }
-
-
-/*
-static int number_length(int number) {
-  if (number == 0)
-    return 1;
-  else
-    return ((int)log10(abs(number))) + (number < 0 ? 1 : 0) + 1;
-}
-*/
 
 
 static void show_status(z_ucs *room_description, int status_line_mode,
@@ -2092,83 +2087,98 @@ static void show_status(z_ucs *room_description, int status_line_mode,
 
     z_ucs_output(room_description);
 
-    if (status_line_mode == SCORE_MODE_SCORE_AND_TURN) {
-      // 8.2.3.1: The score may be assumed to be in the range -99 to 999
-      // inclusive, and the turn number in the range 0 to 9999.
+    // Still space for score/turn/time?
+    if (z_windows[statusline_window_id]->xcursorpos
+        < z_windows[statusline_window_id]->xsize
+        - v3_status_bar_left_scoreturntime_margin) {
 
-      sprintf(latin1_buf1, ": %d  ", parameter1);
-      sprintf(latin1_buf2, ": %d", parameter2);
+      if (status_line_mode == SCORE_MODE_SCORE_AND_TURN) {
+        // 8.2.3.1: The score may be assumed to be in the range -99 to 999
+        // inclusive, and the turn number in the range 0 to 9999.
 
-      rightside_char_length
-        = z_ucs_len(libpixelif_score_string)
-        + strlen(latin1_buf1)
-        + z_ucs_len(libpixelif_turns_string)
-        + strlen(latin1_buf2);
+        sprintf(latin1_buf1, ": %d  ", parameter1);
+        sprintf(latin1_buf2, ": %d", parameter2);
 
-      if (rightside_buf_zucs_len < rightside_char_length) {
-        // Allocate a little more so we should be done with one allocation
-        // for the game.
-        rightside_buf_zucs_len = rightside_char_length + 10;
-        TRACE_LOG("Allocating %d bytes for rightside_buf_zucs_len.\n",
-            rightside_buf_zucs_len);
-        rightside_buf_zucs
-          = (z_ucs*)fizmo_realloc(
-              rightside_buf_zucs,
-              rightside_buf_zucs_len * sizeof(z_ucs));
+        rightside_char_length
+          = z_ucs_len(libpixelif_score_string)
+          + strlen(latin1_buf1)
+          + z_ucs_len(libpixelif_turns_string)
+          + strlen(latin1_buf2);
+
+        if (rightside_buf_zucs_len < rightside_char_length) {
+          // Allocate a little more so we should be done with one allocation
+          // for the game.
+          rightside_buf_zucs_len = rightside_char_length + 10;
+          TRACE_LOG("Allocating %d bytes for rightside_buf_zucs_len.\n",
+              rightside_buf_zucs_len);
+          rightside_buf_zucs
+            = (z_ucs*)fizmo_realloc(
+                rightside_buf_zucs,
+                rightside_buf_zucs_len * sizeof(z_ucs));
+        }
+
+        ptr = z_ucs_cpy(rightside_buf_zucs, libpixelif_score_string);
+        ptr = z_ucs_cat_latin1(ptr, latin1_buf1);
+        ptr = z_ucs_cat(ptr, libpixelif_turns_string);
+        ptr = z_ucs_cat_latin1(ptr, latin1_buf2);
+      }
+      else if (status_line_mode == SCORE_MODE_TIME) {
+        sprintf(latin1_buf1, "%02d:%02d", parameter1, parameter2);
+
+        rightside_char_length = strlen(latin1_buf1);
+
+        if (rightside_buf_zucs_len < rightside_char_length) {
+          // Allocate a little more so we should be done with one allocation
+          // for the game.
+          rightside_buf_zucs_len = rightside_char_length + 10;
+          TRACE_LOG("Allocating %d bytes for rightside_buf_zucs_len.\n",
+              rightside_buf_zucs_len);
+          rightside_buf_zucs
+            = (z_ucs*)fizmo_realloc(
+                rightside_buf_zucs,
+                rightside_buf_zucs_len * sizeof(z_ucs));
+        }
+
+        latin1_string_to_zucs_string(rightside_buf_zucs, latin1_buf1, 8);
+      }
+      else {
+        // Neither SCORE_MODE_SCORE_AND_TURN nor SCORE_MODE_TIME.
       }
 
-      ptr = z_ucs_cpy(rightside_buf_zucs, libpixelif_score_string);
-      ptr = z_ucs_cat_latin1(ptr, latin1_buf1);
-      ptr = z_ucs_cat(ptr, libpixelif_turns_string);
-      ptr = z_ucs_cat_latin1(ptr, latin1_buf2);
-    }
-    else if (status_line_mode == SCORE_MODE_TIME) {
-      sprintf(latin1_buf1, "%02d:%02d", parameter1, parameter2);
+      rightside_pixel_length
+        = get_glyph_string_size(
+            rightside_buf_zucs,
+            z_windows[statusline_window_id]->output_true_type_font);
 
-      rightside_char_length = strlen(latin1_buf1);
+      right_pos
+        = z_windows[statusline_window_id]->xsize
+        - v3_status_bar_right_margin
+        - rightside_pixel_length
+        - v3_status_bar_left_scoreturntime_margin;
 
-      if (rightside_buf_zucs_len < rightside_char_length) {
-        // Allocate a little more so we should be done with one allocation
-        // for the game.
-        rightside_buf_zucs_len = rightside_char_length + 10;
-        TRACE_LOG("Allocating %d bytes for rightside_buf_zucs_len.\n",
-            rightside_buf_zucs_len);
-        rightside_buf_zucs
-          = (z_ucs*)fizmo_realloc(
-              rightside_buf_zucs,
-              rightside_buf_zucs_len * sizeof(z_ucs));
+      // Pad up with spaces -- if there is actually space to fill.
+      if (z_windows[statusline_window_id]->xcursorpos < right_pos) {
+
+        while (z_windows[statusline_window_id]->xcursorpos < right_pos) {
+          z_ucs_output(space_string);
+        }
+
+        z_windows[statusline_window_id]->xcursorpos = right_pos;
+        z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
+        z_windows[statusline_window_id]->rightmost_filled_xpos
+          = z_windows[statusline_window_id]->xcursorpos;
+      }
+      else {
+        // We need at least some space.
+        z_ucs_output(space_string);
       }
 
-      latin1_string_to_zucs_string(rightside_buf_zucs, latin1_buf1, 8);
-    }
-    else {
-      // Neither SCORE_MODE_SCORE_AND_TURN nor SCORE_MODE_TIME.
-    }
+      z_ucs_output(rightside_buf_zucs);
 
-    rightside_pixel_length
-      = get_glyph_string_size(
-          rightside_buf_zucs,
-          z_windows[statusline_window_id]->output_true_type_font);
-
-    right_pos
-      = z_windows[statusline_window_id]->xsize
-      - v3_status_bar_left_margin
-      - rightside_pixel_length
-      - 5; // padding left of score/turn/time string.
-
-    while (z_windows[statusline_window_id]->xcursorpos < right_pos) {
-      z_ucs_output(space_string);
-    }
-
-    z_windows[statusline_window_id]->xcursorpos = right_pos;
-    z_windows[statusline_window_id]->last_gylphs_xcursorpos = -1;
-    z_windows[statusline_window_id]->rightmost_filled_xpos
-      = z_windows[statusline_window_id]->xcursorpos;
-    z_ucs_output(rightside_buf_zucs);
-
-    while (z_windows[statusline_window_id]->xcursorpos
-        < z_windows[statusline_window_id]->xsize) {
-      z_ucs_output(space_string);
+      while (z_windows[statusline_window_id]->xcursorpos
+          < z_windows[statusline_window_id]->xsize) {
+        z_ucs_output(space_string);
+      }
     }
 
     switch_to_window(last_active_z_window_id);
@@ -2266,9 +2276,6 @@ static void refresh_screen() {
   //screen_pixel_interface->set_text_style(0);
   erase_window(0);
 
-  if (last_active_z_window_id != -1)
-    switch_to_window(last_active_z_window_id);
-
   disable_more_prompt = false;
 
   if ((history = init_history_output(outputhistory[0], &history_target))
@@ -2276,8 +2283,10 @@ static void refresh_screen() {
     return;
   TRACE_LOG("History: %p\n", history);
 
-  if ((history = init_history_output(outputhistory[0],&history_target)) == NULL)
+  if ((history = init_history_output(outputhistory[0],&history_target))
+      == NULL) {
     return;
+  }
 
   y_height_to_fill = z_windows[0]->ysize - z_windows[0]->lower_padding;
   saved_padding = z_windows[0]->lower_padding;
@@ -2363,10 +2372,15 @@ static void refresh_screen() {
     z_windows[0]->rightmost_filled_xpos = z_windows[0]->xcursorpos;
   }
 
+  if (last_active_z_window_id != -1) {
+    switch_to_window(last_active_z_window_id);
+  }
+
   refresh_upper_window();
 
-  if (ver <= 3)
+  if (ver <= 3) {
     display_status_line();
+  }
 
   screen_pixel_interface->update_screen();
 }
