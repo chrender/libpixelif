@@ -16,7 +16,7 @@
  *    documentation and/or other materials provided with the distribution.
  * 3. The name of the author may not be used to endorse or promote products
  *    derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
@@ -75,6 +75,56 @@ static void close_ft_stream(FT_Stream stream) {
 }
 
 
+// Will return NULL if unsuccessful or a freshly malloced string (which you
+// have to free() yourself later on) of the dirname + filename in case the
+// file was found.
+static char *find_file_recursively(char *dirname, char *filename) {
+  z_dir *current_dir;
+  struct z_dir_ent z_dir_entry;
+  char *result = NULL;
+  char *fullname = NULL;
+  int fullname_len = 0, current_len = 0;
+
+  if ((current_dir = fsi->open_dir(dirname)) == NULL) {
+    return NULL;
+  }
+
+  while (fsi->read_dir(&z_dir_entry, current_dir) == 0) {
+    if ( (strcmp(z_dir_entry.d_name, ".") == 0)
+        || (strcmp(z_dir_entry.d_name, "..") == 0) ) {
+      continue;
+    }
+
+    current_len = strlen(dirname) + strlen(z_dir_entry.d_name) + 2;
+    if (current_len > fullname_len) {
+      fullname = fizmo_realloc(fullname, current_len);
+      fullname_len = current_len;
+    }
+    strcpy(fullname, dirname);
+    strcat(fullname, "/");
+    strcat(fullname, z_dir_entry.d_name);
+
+    if (fsi->is_filename_directory(fullname) == true) {
+      if ((result = find_file_recursively(fullname, filename)) != NULL) {
+        fsi->close_dir(current_dir);
+        free(fullname);
+        return result;
+      }
+    }
+    else {
+      if (strcmp(z_dir_entry.d_name, filename) == 0) {
+        fsi->close_dir(current_dir);
+        return fullname;
+      }
+    }
+  }
+
+  free(fullname);
+  fsi->close_dir(current_dir);
+  return NULL;
+}
+
+
 true_type_font *create_true_type_font(true_type_factory *factory,
     char *font_filename, int pixel_size, int line_height) {
   int ft_error;
@@ -93,16 +143,28 @@ true_type_font *create_true_type_font(true_type_factory *factory,
   token = strtok(path_copy, ":");
   fontfile = NULL;
   while (token) {
+    if ((filename = find_file_recursively(token, font_filename)) != NULL) {
+      fontfile = fsi->openfile(filename, FILETYPE_DATA, FILEACCESS_READ);
+      free(filename);
+
+      if (fontfile != NULL) {
+        break;
+      }
+    }
+
+    /*
     filename = fizmo_malloc(strlen(token) + strlen(font_filename) + 2);
     strcpy(filename, token);
     strcat(filename, "/");
     strcat(filename, font_filename);
     if ((fontfile = fsi->openfile(filename, FILETYPE_DATA, FILEACCESS_READ))
-        != NULL) {  
+        != NULL) {
       free(filename);
       break;
     }
     free(filename);
+    */
+
     token = strtok(NULL, ":");
   }
   free(path_copy);
