@@ -115,7 +115,7 @@ struct z_window {
 
 static char *screen_pixel_interface_version = LIBPIXELINTERFACE_VERSION;
 //static FT_Library ftlibrary;
-static true_type_factory *font_factory;
+static true_type_factory *font_factory = NULL;
 static int screen_height_in_pixel = -1;
 static int screen_width_in_pixel = -1;
 static int nof_active_z_windows = 0;
@@ -153,14 +153,14 @@ static FT_Face current_face;
 static bool italic_font_available;
 static bool bold_font_available;
 static bool fixed_font_available;
-static true_type_font *regular_font;
-static true_type_font *italic_font;
-static true_type_font *bold_font;
-static true_type_font *bold_italic_font;
-static true_type_font *fixed_regular_font;
-static true_type_font *fixed_italic_font;
-static true_type_font *fixed_bold_font;
-static true_type_font *fixed_bold_italic_font;
+static true_type_font *regular_font = NULL;
+static true_type_font *italic_font = NULL;
+static true_type_font *bold_font = NULL;
+static true_type_font *bold_italic_font = NULL;
+static true_type_font *fixed_regular_font = NULL;
+static true_type_font *fixed_italic_font = NULL;
+static true_type_font *fixed_bold_font = NULL;
+static true_type_font *fixed_bold_italic_font = NULL;
 static int line_height;
 static int fixed_width_char_width = 8;
 static true_type_wordwrapper *preloaded_wordwrapper;
@@ -489,8 +489,12 @@ static int draw_glyph(z_ucs charcode, int window_number,
   bool reverse = false;
   z_rgb_colour foreground_colour, background_colour;
 
-  TRACE_LOG("statusline_window style: %d.\n",
-      z_windows[statusline_window_id]->output_text_style);
+  /*
+  if (statusline_window_id != -1) {
+    TRACE_LOG("statusline_window style: %d.\n",
+        z_windows[statusline_window_id]->output_text_style);
+  }
+  */
 
   if (charcode == Z_UCS_NEWLINE) {
     if (break_line(window_number) == false) {
@@ -1613,9 +1617,13 @@ static int pixel_close_interface(z_ucs *error_message) {
     tt_destroy_font(italic_font);
   }
 
-  tt_destroy_font(regular_font);
+  if (regular_font != NULL) {
+    tt_destroy_font(regular_font);
+  }
 
-  destroy_true_type_factory(font_factory);
+  if (font_factory != NULL) {
+    destroy_true_type_factory(font_factory);
+  }
 
   interface_open = false;
   return 0;
