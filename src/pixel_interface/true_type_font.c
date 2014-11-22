@@ -96,7 +96,9 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
   int ft_error, left_reverse_x, reverse_width;
   int screen_x, screen_y, advance, start_x, bitmap_x, bitmap_y;
   uint8_t pixel;
+  uint8_t pixel2, pixel3;
   float pixel_value;
+  float pixel_value2, pixel_value3;
   int dr, dg, db; // delta from foreground to background
   uint8_t br, bg, bb; // pre-evaluated background colors
   int draw_width;
@@ -110,7 +112,7 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
 
   ft_error = FT_Render_Glyph(
       font->face->glyph,
-      FT_RENDER_MODE_NORMAL);
+      font->render_mode);
 
   slot = font->face->glyph;
   bitmap = slot->bitmap;
@@ -194,18 +196,41 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
       bitmap.width, bitmap.rows, charcode);
   */
   TRACE_LOG("Glyph display at %d / %d.\n", x, y);
-  for (bitmap_y=0; bitmap_y<bitmap.rows; bitmap_y++, screen_y++) {
-    screen_x = start_x;
-    for (bitmap_x=0; bitmap_x<bitmap.width; bitmap_x++, screen_x++) {
-      pixel = bitmap.buffer[bitmap_y*bitmap.width + bitmap_x];
-      if (pixel) {
-        pixel_value = (float)pixel / (float)255;
-        screen_pixel_interface->draw_rgb_pixel(
-            screen_y,
-            screen_x,
-            br + pixel_value * dr,
-            bg + pixel_value * dg,
-            bb + pixel_value * db);
+  if (bitmap.pixel_mode == FT_PIXEL_MODE_LCD) {
+    for (bitmap_y=0; bitmap_y<bitmap.rows; bitmap_y++, screen_y++) {
+      screen_x = start_x;
+      for (bitmap_x=0; bitmap_x<bitmap.width; bitmap_x+=3, screen_x++) {
+        pixel = bitmap.buffer[bitmap_y*bitmap.pitch+ bitmap_x];
+        pixel2 = bitmap.buffer[bitmap_y*bitmap.pitch + bitmap_x + 1];
+        pixel3 = bitmap.buffer[bitmap_y*bitmap.pitch+ bitmap_x + 2];
+        if (pixel && pixel2 && pixel3 ) {
+          pixel_value = (float)pixel / (float)255;
+          pixel_value2 = (float)pixel2 / (float)255;
+          pixel_value3 = (float)pixel3 / (float)255;
+          screen_pixel_interface->draw_rgb_pixel(
+              screen_y,
+              screen_x,
+              br + pixel_value * dr,
+              bg + pixel_value2 * dg,
+              bb + pixel_value3 * db);
+        }
+      }
+    }
+  }
+  else {
+    for (bitmap_y=0; bitmap_y<bitmap.rows; bitmap_y++, screen_y++) {
+      screen_x = start_x;
+      for (bitmap_x=0; bitmap_x<bitmap.width; bitmap_x++, screen_x++) {
+        pixel = bitmap.buffer[bitmap_y*bitmap.pitch+ bitmap_x];
+        if (pixel) {
+          pixel_value = (float)pixel / (float)255;
+          screen_pixel_interface->draw_rgb_pixel(
+              screen_y,
+              screen_x,
+              br + pixel_value * dr,
+              bg + pixel_value * dg,
+              bb + pixel_value * db);
+        }
       }
     }
   }

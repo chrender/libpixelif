@@ -38,6 +38,7 @@
 struct true_type_factory_struct {
   FT_Library ftlibrary;
   char *font_search_path;
+  FT_Render_Mode render_mode;
 };
 
 typedef struct true_type_factory_struct true_type_factory;

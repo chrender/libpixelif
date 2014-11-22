@@ -46,6 +46,7 @@ struct true_type_font_struct {
   int font_height_in_pixel;
   int line_height;
   z_ucs last_char; // for kerning
+  FT_Render_Mode render_mode;
 };
 
 typedef struct true_type_font_struct true_type_font;

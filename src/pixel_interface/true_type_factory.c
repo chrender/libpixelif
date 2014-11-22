@@ -31,6 +31,7 @@
 
 
 #include <ft2build.h>
+#include <ftlcdfil.h>
 #include FT_FREETYPE_H
 
 #include "true_type_factory.h"
@@ -53,6 +54,14 @@ true_type_factory *create_true_type_factory(char *font_search_path) {
         i18n_libpixelif_FUNCTION_CALL_P0S_ABORTED_DUE_TO_ERROR,
         -1,
         "FT_Init_FreeType");
+  }
+
+  if ((ft_error = FT_Library_SetLcdFilter(
+          result->ftlibrary, FT_LCD_FILTER_DEFAULT))) {
+    result->render_mode = FT_RENDER_MODE_NORMAL;
+  }
+  else {
+    result->render_mode = FT_RENDER_MODE_LCD;
   }
 
   result->font_search_path = strdup(font_search_path);
@@ -210,6 +219,7 @@ true_type_font *create_true_type_font(true_type_factory *factory,
 
   result->font_height_in_pixel = pixel_size;
   result->line_height = line_height;
+  result->render_mode = factory->render_mode;
 
   ft_error = FT_Set_Pixel_Sizes(
       result->face,
