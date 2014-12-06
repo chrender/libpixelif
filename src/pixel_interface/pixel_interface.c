@@ -98,6 +98,7 @@ struct z_window {
   // Attributes for internal use:
   int window_number;
   int nof_consecutive_lines_output; // line counter for [more]
+  int nof_lines_in_current_paragraph;
 
   z_colour output_foreground_colour;
   z_colour output_background_colour;
@@ -361,8 +362,8 @@ static bool break_line(int window_number) {
         - z_windows[window_number]->lower_padding;
     }
     else {
-      //printf("breaking line, moving cursor downm no scrolling.\n");
-      TRACE_LOG("breaking line, moving cursor downm no scrolling.\n");
+      //printf("breaking line, moving cursor down, no scrolling.\n");
+      TRACE_LOG("breaking line, moving cursor down, no scrolling necessary.\n");
       z_windows[window_number]->ycursorpos += line_height;
     }
     TRACE_LOG("new y-cursorpos: %d\n", z_windows[window_number]->ycursorpos);
@@ -375,10 +376,12 @@ static bool break_line(int window_number) {
 
   nof_break_line_invocations++;
   z_windows[window_number]->nof_consecutive_lines_output++;
+  z_windows[window_number]->nof_lines_in_current_paragraph++;
 
   TRACE_LOG("consecutive lines: %d.\n",
       z_windows[window_number]->nof_consecutive_lines_output);
-
+  TRACE_LOG("lines in current paragraph: %d.\n",
+      z_windows[window_number]->nof_lines_in_current_paragraph);
   // FIXME: Implement height 255
   if ( (z_windows[window_number]->nof_consecutive_lines_output
         >= (screen_height_in_pixel / line_height) - 1)
@@ -1087,76 +1090,29 @@ static void z_ucs_output(z_ucs *z_ucs_output) {
       active_z_window_id,
       active_z_window_id != -1 ? z_windows[active_z_window_id]->buffering : -1);
 
-  /*
-  if (((z_windows[active_z_window_id]->fixedfont_forced_by_flags2 == false)
-        && (z_mem[0x11] & 2))
-      || ((z_windows[active_z_window_id]->fixedfont_forced_by_flags2 == true)
-        && ((z_mem[0x11] & 2)) == 0)) {
-    // "Game sets to force printing in fixed-pitch font" has changed.
-    if ((z_mem[0x11] & 2)) {
-      // Fixed-width turned on.
-      z_windows[active_z_window_id]->fixedfont_forced_by_flags2 = true;
-      TRACE_LOG("fixedfont_forced_by_flags2 turned on.\n");
-
-      if (bool_equal(z_windows[active_z_window_id]->buffering, false)) {
-        update_window_true_type_font(active_z_window_id, true);
-      }
-      else {
-        if ((z_windows[active_z_window_id]->current_wrapper_style
-              & Z_STYLE_FIXED_PITCH) == 0) {
-          freetype_wordwrap_insert_metadata(
-              z_windows[active_z_window_id]->wordwrapper,
-              &wordwrap_output_style,
-              (void*)(&z_windows[active_z_window_id]->window_number),
-              (uint32_t)z_windows[active_z_window_id]->current_wrapper_style
-              | Z_STYLE_FIXED_PITCH,
-              evaluate_font(
-                z_windows[active_z_window_id]->current_wrapper_style,
-                z_windows[active_z_window_id]->current_wrapper_font,
-                true));
-        }
-      }
+  if ( (z_ucs_output != NULL) && (*z_ucs_output != 0) ) {
+    if (interface_open != true) {
+      screen_pixel_interface->console_output(z_ucs_output);
     }
     else {
-      // Fixed width turned off.
-      z_windows[active_z_window_id]->fixedfont_forced_by_flags2 = false;
-      TRACE_LOG("fixedfont_forced_by_flags2 turned off.\n");
-
+      // Since the "flush-output-on-newline" config option ist set, we
+      // know that we can have only one Z_UCS_NEWLINE per invocation of
+      // this function, and that it will be the first output char.
+      if (*z_ucs_output == Z_UCS_NEWLINE) {
+        z_windows[active_z_window_id]->nof_lines_in_current_paragraph = 0;
+      }
       if (bool_equal(z_windows[active_z_window_id]->buffering, false)) {
-        update_window_true_type_font(active_z_window_id, false);
+        z_ucs_output_window_target(
+            z_ucs_output,
+            (void*)(&z_windows[active_z_window_id]->window_number));
       }
       else {
-        if ((z_windows[active_z_window_id]->current_wrapper_style
-              & Z_STYLE_FIXED_PITCH) == 0) {
-          freetype_wordwrap_insert_metadata(
-              z_windows[active_z_window_id]->wordwrapper,
-              &wordwrap_output_style,
-              (void*)(&z_windows[active_z_window_id]->window_number),
-              (uint32_t)z_windows[active_z_window_id]->current_wrapper_style,
-              evaluate_font(
-                z_windows[active_z_window_id]->current_wrapper_style,
-                z_windows[active_z_window_id]->current_wrapper_font,
-                false));
-        }
+        freetype_wrap_z_ucs(
+          z_windows[active_z_window_id]->wordwrapper, z_ucs_output);
       }
     }
+    TRACE_LOG("z_ucs_output finished.\n");
   }
-  */
-
-  if (interface_open != true) {
-    screen_pixel_interface->console_output(z_ucs_output);
-  }
-  else if (bool_equal(z_windows[active_z_window_id]->buffering, false)) {
-    z_ucs_output_window_target(
-        z_ucs_output,
-        (void*)(&z_windows[active_z_window_id]->window_number));
-  }
-  else {
-    freetype_wrap_z_ucs(
-        z_windows[active_z_window_id]->wordwrapper, z_ucs_output);
-  }
-
-  TRACE_LOG("z_ucs_output finished.\n");
 }
 
 
@@ -1240,15 +1196,15 @@ static void link_interface_to_story(struct z_story *story) {
   font_factory = create_true_type_factory(font_search_path);
 
   if (regular_font_filename == NULL) {
-    set_configuration_value("regular-font", "SourceSansPro-Regular.ttf");
-    set_configuration_value("italic-font", "SourceSansPro-It.ttf");
-    set_configuration_value("bold-font", "SourceSansPro-Bold.ttf");
-    set_configuration_value("bold-italic-font", "SourceSansPro-BoldIt.ttf");
+    set_configuration_value("regular-font", "FiraSans-Regular.ttf");
+    set_configuration_value("italic-font", "FiraSans-RegularItalic.ttf");
+    set_configuration_value("bold-font", "FiraSans-Medium.ttf");
+    set_configuration_value("bold-italic-font", "FiraSans-MediumItalic.ttf");
 
-    set_configuration_value("fixed-regular-font", "SourceCodePro-Regular.ttf");
-    set_configuration_value("fixed-italic-font", "SourceCodePro-Regular.ttf");
-    set_configuration_value("fixed-bold-font", "SourceCodePro-Bold.ttf");
-    set_configuration_value("fixed-bold-italic-font", "SourceCodePro-Bold.ttf");
+    set_configuration_value("fixed-regular-font", "FiraMono-Regular.ttf");
+    set_configuration_value("fixed-italic-font", "FiraMono-Regular.ttf");
+    set_configuration_value("fixed-bold-font", "FiraMono-Bold.ttf");
+    set_configuration_value("fixed-bold-italic-font", "FiraMono-Bold.ttf");
   }
 
   line_height = font_height_in_pixel + 4;
@@ -1379,6 +1335,7 @@ static void link_interface_to_story(struct z_story *story) {
     z_windows[i]->output_font = Z_FONT_NORMAL;
     z_windows[i]->output_true_type_font = regular_font;
     z_windows[i]->nof_consecutive_lines_output = 0;
+    z_windows[i]->nof_lines_in_current_paragraph = 1;
 
     if (i == 0) {
       z_windows[i]->ysize = screen_height_in_pixel;
@@ -2291,18 +2248,12 @@ static void refresh_screen() {
     return;
   TRACE_LOG("History: %p\n", history);
 
-  if ((history = init_history_output(outputhistory[0],&history_target))
-      == NULL) {
-    return;
-  }
-
   y_height_to_fill = z_windows[0]->ysize - z_windows[0]->lower_padding;
   saved_padding = z_windows[0]->lower_padding;
   while (output_rewind_paragraph(history, NULL) == 0) {
     if (y_height_to_fill < 1)
       break;
 
-    nof_paragraphs_to_repeat = 1;
     //printf("y_height_to_fill: %d\n", y_height_to_fill);
     if (y_height_to_fill < line_height) {
       // At this point we know we've got to refresh a partial line. To
@@ -2313,6 +2264,9 @@ static void refresh_screen() {
       //printf("last_output_height: %d\n", last_output_height);
       y_height_to_fill += last_output_height;
       nof_paragraphs_to_repeat = 2;
+    }
+    else {
+      nof_paragraphs_to_repeat = 1;
     }
 
     z_windows[0]->xcursorpos = 0;
@@ -3391,6 +3345,16 @@ static struct z_screen_interface z_pixel_interface = {
 };
 
 
+static void pixelif_paragraph_attribute_function(int *parameter1, int *parameter2) {
+  TRACE_LOG("paragraph_attribute_function invoked, returning %d / %d.\n",
+    z_windows[active_z_window_id]->nof_lines_in_current_paragraph,
+    z_windows[0]->xsize);
+  *parameter1 = z_windows[active_z_window_id]->nof_lines_in_current_paragraph;
+  *parameter2 = z_windows[0]->xsize;
+  return;
+}
+
+
 void fizmo_register_screen_pixel_interface(struct z_screen_pixel_interface
     *new_screen_pixel_interface) {
   if (screen_pixel_interface == NULL) {
@@ -3401,6 +3365,9 @@ void fizmo_register_screen_pixel_interface(struct z_screen_pixel_interface
     set_configuration_value("enable-font3-conversion", "true");
 
     fizmo_register_screen_interface(&z_pixel_interface);
+
+    fizmo_register_paragraph_attribute_function(&pixelif_paragraph_attribute_function);
+    set_configuration_value("flush-output-on-newline", "true");
   }
 }
 

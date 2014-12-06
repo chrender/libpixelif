@@ -150,12 +150,14 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index,
   struct freetype_wordwrap_metadata *metadata_entry;
   int i;
 
-  TRACE_LOG("flush on: %c %d \n",
-      (char)wrapper->input_buffer[flush_index],
-      wrapper->input_buffer[flush_index]);
-
   if (flush_index == -1) {
     flush_index = wrapper->current_buffer_index - 1;
+  }
+  else
+  {
+    TRACE_LOG("flush on: %c %d \n",
+      (char)wrapper->input_buffer[flush_index],
+      wrapper->input_buffer[flush_index]);
   }
   // Ensure there's enough space to place a terminating 0.
   ensure_additional_buffer_capacity(wrapper, 1);
