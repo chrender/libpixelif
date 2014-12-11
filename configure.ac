@@ -5,7 +5,11 @@ AC_ARG_ENABLE([tracing],
  [],
  [enable_tracing=no])
 
-AC_INIT([libpixelif], [0.1.0])
+AC_INIT(
+ [libpixelif],
+ [0.1.0])
+ fizmo@spellbreaker.org,
+ libpixelif)
 
 libpixelif_reqs="freetype2"
 PKG_CHECK_MODULES([libfizmo], [libfizmo >= 0.7.10])
