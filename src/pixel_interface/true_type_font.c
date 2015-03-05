@@ -96,8 +96,15 @@ int tt_get_glyph_size(true_type_font *font, z_ucs char_code,
         font->glyph_size_cache,
         sizeof(glyph_size) * new_glyph_cache_size);
 
+    TRACE_LOG("Cache at %p.\n", font->glyph_size_cache);
+
     // fill uninitialzed memory.
-    TRACE_LOG("clearning mem from %x, %d bytes.\n",
+    TRACE_LOG("clearning mem from %p, %d bytes.\n",
+        font->glyph_size_cache + font->glyph_size_cache_size,
+        (new_glyph_cache_size - font->glyph_size_cache_size)
+        * sizeof(glyph_size));
+
+    TRACE_LOG("memset: %p, %d.\n",
         font->glyph_size_cache + font->glyph_size_cache_size,
         (new_glyph_cache_size - font->glyph_size_cache_size)
         * sizeof(glyph_size));

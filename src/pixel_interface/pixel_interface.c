@@ -1484,6 +1484,8 @@ static void link_interface_to_story(struct z_story *story) {
       z_windows[i]->current_wrapper_style = z_windows[i]->text_style;
       z_windows[i]->current_wrapper_font = z_windows[i]->font_type;
     }
+    z_windows[i]->rightmost_filled_xpos
+      = z_windows[i]->xcursorpos;
 
     erase_window(i);
 
