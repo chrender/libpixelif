@@ -1123,7 +1123,7 @@ static void z_ucs_output(z_ucs *z_ucs_output) {
         if (active_z_window_id == 0) {
           total_lines_in_history
             += z_windows[active_z_window_id]->nof_lines_in_current_paragraph;
-          printf("total_lines_in_history: %ld.\n", total_lines_in_history);
+          //printf("total_lines_in_history: %ld.\n", total_lines_in_history);
         }
         z_windows[active_z_window_id]->nof_lines_in_current_paragraph = 0;
       }
@@ -1208,11 +1208,13 @@ static void refresh_scrollbar() {
     bar_height = screen_height_in_pixel;
   }
 
+  /*
   printf("bar_height: %ld %d %d %d\n",
       total_lines_in_history,
       font_height_in_pixel,
       screen_height_in_pixel,
       bar_height);
+  */
 
   screen_pixel_interface->fill_area(
       screen_width_in_pixel,
@@ -3413,10 +3415,10 @@ static struct z_screen_interface z_pixel_interface = {
 static void pixelif_paragraph_attribute_function(int *parameter1,
  int *parameter2) {
   TRACE_LOG("paragraph_attribute_function invoked, returning %d / %d.\n",
-    z_windows[active_z_window_id]->nof_lines_in_current_paragraph,
-    z_windows[0]->xsize);
-  printf("add: %d\n",
-      z_windows[active_z_window_id]->nof_lines_in_current_paragraph);
+      z_windows[active_z_window_id]->nof_lines_in_current_paragraph,
+      z_windows[0]->xsize);
+  //printf("add: %d\n",
+  //    z_windows[active_z_window_id]->nof_lines_in_current_paragraph);
   *parameter1 = z_windows[active_z_window_id]->nof_lines_in_current_paragraph;
   *parameter2 = z_windows[0]->xsize;
   return;
@@ -3425,9 +3427,9 @@ static void pixelif_paragraph_attribute_function(int *parameter1,
 
 static void pixelif_paragraph_removal_function(int parameter1,
     int parameter2) {
-  printf("remove: %d\n", parameter1);
+  //printf("remove: %d\n", parameter1);
   total_lines_in_history -= parameter1;
-  printf("total_lines_in_history: %ld.\n", total_lines_in_history);
+  //printf("total_lines_in_history: %ld.\n", total_lines_in_history);
   return;
 }
 
