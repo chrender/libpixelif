@@ -16,7 +16,7 @@
  *    documentation and/or other materials provided with the distribution.
  * 3. The name of the author may not be used to endorse or promote products
  *    derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
@@ -36,6 +36,7 @@
 #include "true_type_font.h"
 #include "tools/unused.h"
 #include "tools/tracelog.h"
+#include "interpreter/fizmo.h"
 
 
 /*
@@ -53,9 +54,7 @@ int tt_get_glyph_get_distance_to_rightmost_pixel(true_type_font *font,
 */
 
 
-//int tt_get_glyph_advance(true_type_font *font, z_ucs current_char,
-//    z_ucs UNUSED(last_char)) {
-int tt_get_glyph_size(true_type_font *font, z_ucs char_code,
+static int get_glyph_size(true_type_font *font, z_ucs char_code,
     int *advance, int *bitmap_width) {
 
   FT_UInt glyph_index;
@@ -78,12 +77,70 @@ int tt_get_glyph_size(true_type_font *font, z_ucs char_code,
 }
 
 
-// NOTE: Glyph pixels are only drawn in case they are not completely
-// equal to background color. This is required, since especially in case
+//int tt_get_glyph_advance(true_type_font *font, z_ucs current_char,
+//    z_ucs UNUSED(last_char)) {
+int tt_get_glyph_size(true_type_font *font, z_ucs char_code,
+    int *advance, int *bitmap_width) {
+  int result;
+  long new_glyph_cache_size;
+
+  if ((font->glyph_size_cache == NULL)
+      || (font->glyph_size_cache_size < char_code)) {
+
+    new_glyph_cache_size = char_code + 1024;
+
+    TRACE_LOG("(Re-)allocating %d bytes for glyph cache.\n",
+        sizeof(glyph_size) * new_glyph_cache_size);
+
+    font->glyph_size_cache = fizmo_realloc(
+        font->glyph_size_cache,
+        sizeof(glyph_size) * new_glyph_cache_size);
+
+    // fill uninitialzed memory.
+    TRACE_LOG("clearning mem from %x, %d bytes.\n",
+        font->glyph_size_cache + font->glyph_size_cache_size,
+        (new_glyph_cache_size - font->glyph_size_cache_size)
+        * sizeof(glyph_size));
+
+    memset(
+        font->glyph_size_cache + font->glyph_size_cache_size,
+        0,
+        (new_glyph_cache_size - font->glyph_size_cache_size)
+        * sizeof(glyph_size));
+
+    font->glyph_size_cache_size = new_glyph_cache_size;
+  }
+
+  if (font->glyph_size_cache[char_code].is_valid == 1) {
+    TRACE_LOG("found glyph size cache hit for %c/%d.\n", char_code, char_code);
+
+    *advance = font->glyph_size_cache[char_code].advance;
+    *bitmap_width = font->glyph_size_cache[char_code].bitmap_width;
+
+    return 0;
+  }
+  else {
+    TRACE_LOG("no glyph size cache hit for %c/%d.\n", char_code, char_code);
+    result = get_glyph_size(font, char_code, advance, bitmap_width);
+
+    if (result == 0) {
+      font->glyph_size_cache[char_code].is_valid = 1;
+      font->glyph_size_cache[char_code].advance = *advance;
+      font->glyph_size_cache[char_code].bitmap_width = *bitmap_width;
+    }
+
+    return result;
+  }
+}
+
+
+
+// note: glyph pixels are only drawn in case they are not completely
+// equal to background color. this is required, since especially in case
 // of italic faces hori_advance may be smaller(!) then the width of a
-// glyph, causing characters to overlay on screen. This may be reproduced
-// by using "SourceSansPro-It.ttf" in etude.z5 section 4 and looking at
-// "Test of italic (or underlined) text." where the closing bracket
+// glyph, causing characters to overlay on screen. this may be reproduced
+// by using "sourcesanspro-it.ttf" in etude.z5 section 4 and looking at
+// "test of italic (or underlined) text." where the closing bracket
 // overwrites the right d's vertical stroke.
 int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
     z_rgb_colour foreground_colour,
@@ -159,14 +216,14 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
 
   x += slot->bitmap_left;
   /*
-  printf("y: %d, %d, %d\n", 
+  printf("y: %d, %d, %d\n",
       y, (int)font->face->size->metrics.ascender/64, (int)slot->bitmap_top);
   */
   y += font->face->size->metrics.ascender/64 - slot->bitmap_top;
 
   // FIXME: Free glyph's memory.
   // FT_Done_FreeType
-  
+
   //use_kerning = FT_HAS_KERNING(font->face);
 
   /*
@@ -242,6 +299,9 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
 
 
 void tt_destroy_font(true_type_font *font) {
+  if (font->glyph_size_cache != NULL) {
+    free(font->glyph_size_cache);
+  }
   FT_Done_Face(font->face);
   free(font);
 }

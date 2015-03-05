@@ -220,6 +220,8 @@ true_type_font *create_true_type_font(true_type_factory *factory,
   result->font_height_in_pixel = pixel_size;
   result->line_height = line_height;
   result->render_mode = factory->render_mode;
+  result->glyph_size_cache = NULL;
+  result->glyph_size_cache_size = 0;
 
   ft_error = FT_Set_Pixel_Sizes(
       result->face,

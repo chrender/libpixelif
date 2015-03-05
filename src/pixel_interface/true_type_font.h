@@ -16,7 +16,7 @@
  *    documentation and/or other materials provided with the distribution.
  * 3. The name of the author may not be used to endorse or promote products
  *    derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
@@ -40,6 +40,12 @@
 #include "../screen_interface/screen_pixel_interface.h"
 
 
+typedef struct glyph_size_struct {
+    int is_valid;
+    int advance;
+    int bitmap_width;
+} glyph_size;
+
 struct true_type_font_struct {
   FT_Face face;
   //bool has_kerning;
@@ -47,6 +53,8 @@ struct true_type_font_struct {
   int line_height;
   z_ucs last_char; // for kerning
   FT_Render_Mode render_mode;
+  glyph_size *glyph_size_cache;
+  long glyph_size_cache_size;
 };
 
 typedef struct true_type_font_struct true_type_font;
