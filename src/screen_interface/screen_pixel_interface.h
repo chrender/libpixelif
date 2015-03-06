@@ -38,6 +38,7 @@
 #define EVENT_WAS_INPUT             0x1000
 
 #define EVENT_WAS_TIMEOUT           0x2000
+#define EVENT_WAS_NOTHING           0x2001  // Used for polling
 
 #define EVENT_WAS_WINCH             0x3000
 
@@ -58,7 +59,7 @@ struct z_screen_pixel_interface
 {
   void (*draw_rgb_pixel)(int y, int x, uint8_t r, uint8_t g, uint8_t b);
   bool (*is_input_timeout_available)();
-  int (*get_next_event)(z_ucs *input, int timeout_millis);
+  int (*get_next_event)(z_ucs *input, int timeout_millis, bool poll_only);
 
   char* (*get_interface_name)();
   bool (*is_colour_available)();

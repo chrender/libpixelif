@@ -118,7 +118,8 @@ static char *screen_pixel_interface_version = LIBPIXELINTERFACE_VERSION;
 //static FT_Library ftlibrary;
 static true_type_factory *font_factory = NULL;
 static int screen_height_in_pixel = -1;
-static int screen_width_in_pixel = -1;
+static int total_screen_width_in_pixel = -1;
+static int screen_width_without_scrollbar = -1;
 static int nof_active_z_windows = 0;
 static int statusline_window_id = -1;
 static int custom_left_margin = 8;
@@ -165,7 +166,7 @@ static true_type_font *fixed_bold_italic_font = NULL;
 static int line_height;
 static int fixed_width_char_width = 8;
 static true_type_wordwrapper *preloaded_wordwrapper;
-static int scrollbar_width = 12;
+static int scrollbar_width = 14;
 
 // Scrolling upwards:
 // It is always assumed that there's no output to window[0] and it's
@@ -176,7 +177,7 @@ static int scrollbar_width = 12;
 // most cases result from a interrupt routine.
 static int top_upscroll_line = -1; // != -1 indicates upscroll is active.
 static bool upscroll_hit_top = false;
-static history_output *history; // shared by upscroll and screen-refresh
+static history_output *history = NULL; // shared by upscroll and screen-refresh
 //static int history_screen_line, last_history_screen_line;
 
 // This flag is set to true when an read_line is currently underway. It's
@@ -211,6 +212,7 @@ static char *font_search_path = FONT_DEFAULT_SEARCH_PATH;
 static int font_height_in_pixel = 14;
 static char last_font_size_config_value_as_string[MAX_VALUE_AS_STRING_LEN];
 static long total_lines_in_history = 0;
+static bool history_has_to_be_remeasured = false;
 
 //static z_ucs newline_string[] = { Z_UCS_NEWLINE, 0 };
 
@@ -277,11 +279,103 @@ static void flush_window(int window_number) {
 }
 
 
+static void refresh_scrollbar() {
+  int bar_height;
+
+  screen_pixel_interface->fill_area(
+      screen_width_without_scrollbar,
+      0,
+      scrollbar_width,
+      screen_height_in_pixel,
+      0x00c0c0c0);
+
+  bar_height =
+    screen_height_in_pixel
+    / (double)(total_lines_in_history * line_height)
+    * screen_height_in_pixel;
+
+  if (bar_height > screen_height_in_pixel) {
+    bar_height = screen_height_in_pixel;
+  }
+
+  /*
+  printf("bar_height: %ld %d %d %d\n",
+      total_lines_in_history,
+      font_height_in_pixel,
+      screen_height_in_pixel,
+      bar_height);
+
+  printf("bar-fill: %d %d %d %d\n",
+      screen_width_without_scrollbar,
+      screen_height_in_pixel - bar_height,
+      scrollbar_width,
+      bar_height);
+  */
+
+  screen_pixel_interface->fill_area(
+      screen_width_without_scrollbar + 2,
+      screen_height_in_pixel - bar_height,
+      scrollbar_width - 4,
+      bar_height,
+      0x00404040);
+}
+
+
+static int get_next_event_wrapper(z_ucs *input, int timeout_millis) {
+  int event_type, result;
+
+  TRACE_LOG("get_next_event_wrapper, history_has_to_be_remeasured: %d.\n",
+      history_has_to_be_remeasured);
+
+  /*
+  while (history_has_to_be_remeasured == true) {
+
+    if (history == NULL) {
+      TRACE_LOG("creating output history for re-measurement.");
+
+      if ((history = init_history_output(outputhistory[0], &history_target))
+          == NULL) {
+        TRACE_LOG("Could not create history.\n");
+      }
+
+      result = output_rewind_paragraph(history, NULL, NULL, NULL);
+
+      if (result == 1) {
+        destroy_history_output(history);
+        history = NULL;
+        history_has_to_be_remeasured = false;
+      }
+      else if (result == 0) {
+      }
+      else {
+        TRACE_LOG("Error during rewind..\n");
+        destroy_history_output(history);
+        history = NULL;
+        history_has_to_be_remeasured = false;
+      }
+    }
+
+    TRACE_LOG("Polling for next event.\n");
+    event_type = screen_pixel_interface->get_next_event(
+        input, timeout_millis, true);
+
+    if (event_type != EVENT_WAS_NOTHING) {
+      return event_type;
+    }
+  }
+  TRACE_LOG("Waiting for next event.\n");
+  */
+
+  return screen_pixel_interface->get_next_event(input, timeout_millis, false);
+}
+
+
 // Will return true in case break_line was successful and the cursor is now
 // on a fresh line, false otherwise (if, for example, scrolling is disabled
 // and the cursor is on the bottom-right position of the window).
 static bool break_line(int window_number, bool measurement_only) {
-  z_ucs input, event_type;
+  z_ucs input;
+  int event_type;
   int pixels_to_scroll_up, i;
 
   //printf("Breaking line.\n");
@@ -423,12 +517,13 @@ static bool break_line(int window_number, bool measurement_only) {
         display_status_line();
       }
 
+      refresh_scrollbar();
       screen_pixel_interface->update_screen();
       //refresh_cursor(window_number);
 
       // FIXME: Check for sound interrupt?
       do {
-        event_type = screen_pixel_interface->get_next_event(&input, 0);
+        event_type = get_next_event_wrapper(&input, 0);
         if (event_type == EVENT_WAS_TIMEOUT) {
           TRACE_LOG("timeout.\n");
         }
@@ -872,7 +967,7 @@ static uint8_t get_screen_width_in_characters() {
       (screen_width_in_pixel - custom_left_margin - custom_right_margin)
       / fixed_width_char_width);
   */
-  return screen_width_in_pixel / fixed_width_char_width;
+  return screen_width_without_scrollbar / fixed_width_char_width;
 }
 
 
@@ -1189,42 +1284,6 @@ static void erase_window(int16_t window_number) {
 }
 
 
-static void refresh_scrollbar() {
-  int bar_height;
-
-  screen_pixel_interface->fill_area(
-      screen_width_in_pixel,
-      0,
-      scrollbar_width,
-      screen_height_in_pixel,
-      0x00c0c0c0);
-
-  bar_height =
-    screen_height_in_pixel
-    / (double)(total_lines_in_history * font_height_in_pixel)
-    * screen_height_in_pixel;
-
-  if (bar_height > screen_height_in_pixel) {
-    bar_height = screen_height_in_pixel;
-  }
-
-  /*
-  printf("bar_height: %ld %d %d %d\n",
-      total_lines_in_history,
-      font_height_in_pixel,
-      screen_height_in_pixel,
-      bar_height);
-  */
-
-  screen_pixel_interface->fill_area(
-      screen_width_in_pixel,
-      800 - bar_height,
-      scrollbar_width,
-      bar_height,
-      0x00000000);
-}
-
-
 static void link_interface_to_story(struct z_story *story) {
   int bytes_to_allocate;
   int len;
@@ -1363,9 +1422,10 @@ static void link_interface_to_story(struct z_story *story) {
 
   screen_height_in_pixel
     = screen_pixel_interface->get_screen_height_in_pixels();
-  screen_width_in_pixel
-    = screen_pixel_interface->get_screen_width_in_pixels()
-    - scrollbar_width;
+  total_screen_width_in_pixel
+    = screen_pixel_interface->get_screen_width_in_pixels();
+  screen_width_without_scrollbar
+    = total_screen_width_in_pixel - scrollbar_width;
 
   if (ver <= 2)
     nof_active_z_windows = 1;
@@ -1402,7 +1462,7 @@ static void link_interface_to_story(struct z_story *story) {
 
     if (i == 0) {
       z_windows[i]->ysize = screen_height_in_pixel;
-      z_windows[i]->xsize = screen_width_in_pixel;
+      z_windows[i]->xsize = screen_width_without_scrollbar;
       z_windows[i]->scrolling_active = true;
       z_windows[i]->stream2copying_active = true;
       if (ver != 6) {
@@ -1422,7 +1482,7 @@ static void link_interface_to_story(struct z_story *story) {
 
       if (i == 1) {
         z_windows[i]->ysize = 0;
-        z_windows[i]->xsize = screen_width_in_pixel;
+        z_windows[i]->xsize = screen_width_without_scrollbar;
         if (statusline_window_id > 0)
           z_windows[i]->ypos += line_height;
         if (ver != 6) {
@@ -1433,7 +1493,7 @@ static void link_interface_to_story(struct z_story *story) {
       }
       else if (i == statusline_window_id) {
         z_windows[i]->ysize = line_height;
-        z_windows[i]->xsize = screen_width_in_pixel;
+        z_windows[i]->xsize = screen_width_without_scrollbar;
         z_windows[i]->scrolling_active = false;
         //z_windows[i]->text_style = Z_STYLE_REVERSE_VIDEO;
         //z_windows[i]->output_text_style = Z_STYLE_REVERSE_VIDEO;
@@ -1600,7 +1660,7 @@ static int pixel_close_interface(z_ucs *error_message) {
     screen_pixel_interface->update_screen();
 
     do
-      event_type = screen_pixel_interface->get_next_event(&input, 0);
+      event_type = screen_pixel_interface->get_next_event(&input, 0, false);
     while (event_type == EVENT_WAS_WINCH);
   }
 
@@ -2093,7 +2153,7 @@ static void show_status(z_ucs *room_description, int status_line_mode,
   TRACE_LOG("\".\n");
 
   TRACE_LOG("statusline-xsize: %d, screen:%d.\n",
-      z_windows[statusline_window_id]->xsize, screen_width_in_pixel);
+      z_windows[statusline_window_id]->xsize, screen_width_without_scrollbar);
 
   if (statusline_window_id > 0) {
     last_active_z_window_id = active_z_window_id;
@@ -2304,11 +2364,9 @@ static void refresh_screen() {
   disable_more_prompt = true;
 
   TRACE_LOG("Refreshing screen, size: %d*%d.\n",
-      screen_width_in_pixel, screen_height_in_pixel);
+      total_screen_width_in_pixel, screen_height_in_pixel);
   //screen_pixel_interface->set_text_style(0);
   erase_window(0);
-
-  disable_more_prompt = false;
 
   if ((history = init_history_output(outputhistory[0], &history_target))
       == NULL)
@@ -2317,7 +2375,7 @@ static void refresh_screen() {
 
   y_height_to_fill = z_windows[0]->ysize - z_windows[0]->lower_padding;
   saved_padding = z_windows[0]->lower_padding;
-  while (output_rewind_paragraph(history, NULL) == 0) {
+  while (output_rewind_paragraph(history, NULL, NULL, NULL) == 0) {
     if (y_height_to_fill < 1)
       break;
 
@@ -2380,6 +2438,8 @@ static void refresh_screen() {
   }
   //printf("done, y_height_to_fill is %d.\n", y_height_to_fill);
   destroy_history_output(history);
+  history = NULL;
+
   z_windows[0]->lower_padding = saved_padding;
   /*
   printf(":: %d, %d. %d, %d\n",
@@ -2411,7 +2471,12 @@ static void refresh_screen() {
     display_status_line();
   }
 
+  refresh_scrollbar();
   screen_pixel_interface->update_screen();
+
+  disable_more_prompt = false;
+  TRACE_LOG("Setting history_has_to_be_remeasured to true.\n");
+  //history_has_to_be_remeasured = true;
 }
 
 
@@ -2459,7 +2524,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
   current_input_buffer = input_buffer;
   current_input_x = &input_x;
   current_input_y = &input_y;
-  history_output *preload_history;
+  history_output *preload_history = NULL;
 
   /*
   z_ucs char_buf[] = { 0, 0 };
@@ -2563,7 +2628,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
     if ((preload_history = init_history_output(outputhistory[0],
             &preload_history_target)) != NULL) {
 
-      TRACE_LOG("History: %p\n", history);
+      TRACE_LOG("History: %p\n", preload_history);
 
       TRACE_LOG("Trying to find paragraph to fill %d lines.\n",
           z_windows[0]->ysize);
@@ -2581,7 +2646,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
       // we're only evaluating the last paragraph, no newlines can occur
       // in the repeated output.
 
-      if (output_rewind_paragraph(preload_history, NULL) < 0) {
+      if (output_rewind_paragraph(preload_history, NULL, NULL, NULL) < 0) {
         printf("err\n");
       }
       output_repeat_paragraphs(preload_history, 1, false, false);
@@ -2594,66 +2659,11 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
         + z_windows[active_z_window_id]->ycursorpos; // - 1 - line_height;
       destroy_freetype_wrapper(preloaded_wordwrapper);
       destroy_history_output(preload_history);
+      preload_history = NULL;
     }
   }
 
   TRACE_LOG("input_x, input_y: %d, %d\n", input_x, input_y);
-
-  /*
-  input_display_width
-    = z_windows[active_z_window_id]->xsize
-    - (z_windows[active_z_window_id]->xcursorpos - 1)
-    - z_windows[active_z_window_id]->rightmargin
-    - preloaded_input;
-
-  TRACE_LOG("input_x:%d, input_y:%d.\n", input_x, input_y);
-  TRACE_LOG("input width: %d.\n", input_display_width);
-
-  //REMOVE:
-  //input_display_width = 5;
-
-  */
-
-
-
-
-
-
-
-
-
-
-  /*
-  printf("XXX\n");
-  if ((history = init_history_output(outputhistory[0],&history_target))
-      != NULL) {
-    TRACE_LOG("History: %p\n", history);
-
-    TRACE_LOG("Trying to find paragraph to fill %d lines.\n",
-        z_windows[0]->ysize);
-
-    if (output_rewind_paragraph(history) < 0) {
-      printf("err\n");
-    }
-
-    output_repeat_paragraphs(history, 1, false, false);
-
-  paragraphs_to_output = 0;
-  while (refresh_newline_counter < z_windows[0]->ysize)
-  {
-    TRACE_LOG("Current refresh_newline_counter: %d, paragraphs: %d\n",
-        refresh_newline_counter, paragraphs_to_output);
-
-    if (output_rewind_paragraph(history) < 0)
-      break;
-
-    TRACE_LOG("Start paragraph repetition.\n");
-    output_repeat_paragraphs(history, 1, false, false);
-
-
-    destroy_history_output(history);
-  }
-  */
 
   TRACE_LOG("xpos:%d\n", z_windows[active_z_window_id]->xcursorpos);
 
@@ -2664,7 +2674,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
   screen_pixel_interface->update_screen();
 
   while (input_in_progress == true) {
-    event_type = screen_pixel_interface->get_next_event(&input, timeout_millis);
+    event_type = get_next_event_wrapper(&input, timeout_millis);
     TRACE_LOG("Evaluating event %d.\n", event_type);
 
     if (event_type == EVENT_WAS_TIMEOUT) {
@@ -3120,7 +3130,7 @@ static int read_char(uint16_t tenth_seconds, uint32_t verification_routine,
 
   while (input_in_progress == true)
   {
-    event_type = screen_pixel_interface->get_next_event(&input, timeout_millis);
+    event_type = get_next_event_wrapper(&input, timeout_millis);
     //printf("event: %d\n", event_type);
 
     if ( (event_type == EVENT_WAS_CODE_PAGE_UP)
@@ -3486,19 +3496,19 @@ void new_pixel_screen_size(int newysize, int newxsize) {
 
   dy = newysize - screen_height_in_pixel;
 
-  screen_width_in_pixel = newxsize - scrollbar_width;
+  total_screen_width_in_pixel = newxsize;
+  screen_width_without_scrollbar = newxsize - scrollbar_width;
   screen_height_in_pixel = newysize;
-  //refresh_scrollbar();
   update_fixed_width_char_width();
 
   fizmo_new_screen_size(
       get_screen_width_in_characters(),
       get_screen_height_in_lines());
 
-  printf("new pixel-window-size: %d*%d.\n",
-      screen_width_in_pixel, screen_height_in_pixel);
+  //printf("new pixel-window-size: %d*%d.\n",
+  //    total_screen_width_in_pixel, screen_height_in_pixel);
   TRACE_LOG("new pixel-window-size: %d*%d.\n",
-      screen_width_in_pixel, screen_height_in_pixel);
+      total_screen_width_in_pixel, screen_height_in_pixel);
 
   z_windows[1]->ysize = last_split_window_size * line_height;
   if (last_split_window_size > newysize - status_offset)
@@ -3509,8 +3519,8 @@ void new_pixel_screen_size(int newysize, int newxsize) {
     // Expand window 0 to new screensize for version != 6.
     if (ver != 6) {
       if (i == 0) {
-        if (z_windows[0]->xsize < screen_width_in_pixel)
-          z_windows[0]->xsize = screen_width_in_pixel;
+        if (z_windows[0]->xsize < screen_width_without_scrollbar)
+          z_windows[0]->xsize = screen_width_without_scrollbar;
 
         z_windows[0]->ysize
           = screen_height_in_pixel - status_offset - z_windows[1]->ysize;
@@ -3518,25 +3528,27 @@ void new_pixel_screen_size(int newysize, int newxsize) {
         z_windows[0]->ycursorpos += dy;
       }
       else if (i == 1) {
-        if (z_windows[1]->xsize != screen_width_in_pixel)
-          z_windows[1]->xsize = screen_width_in_pixel;
+        if (z_windows[1]->xsize != screen_width_without_scrollbar)
+          z_windows[1]->xsize = screen_width_without_scrollbar;
       }
       else if (i == statusline_window_id) {
-        z_windows[statusline_window_id]->xsize = screen_width_in_pixel;
+        z_windows[statusline_window_id]->xsize = screen_width_without_scrollbar;
       }
     }
 
     if (z_windows[i]->ypos > screen_height_in_pixel - 1)
       z_windows[i]->ypos = screen_height_in_pixel - 1;
 
-    if (z_windows[i]->xpos > screen_width_in_pixel - 1)
-      z_windows[i]->xpos = screen_width_in_pixel - 1;
+    if (z_windows[i]->xpos > screen_width_without_scrollbar - 1)
+      z_windows[i]->xpos = screen_width_without_scrollbar - 1;
 
     if (z_windows[i]->ypos + z_windows[i]->ysize > screen_height_in_pixel)
       z_windows[i]->ysize = screen_height_in_pixel - z_windows[i]->ypos;
 
-    if (z_windows[i]->xpos + z_windows[i]->xsize > screen_width_in_pixel) {
-      z_windows[i]->xsize = screen_width_in_pixel - z_windows[i]->xpos;
+    if (z_windows[i]->xpos + z_windows[i]->xsize
+        > screen_width_without_scrollbar) {
+      z_windows[i]->xsize
+        = screen_width_without_scrollbar - z_windows[i]->xpos;
 
       if (z_windows[i]->xsize - z_windows[i]->leftmargin
           - z_windows[i]->rightmargin < 1) {
