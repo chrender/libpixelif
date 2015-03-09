@@ -84,6 +84,9 @@ int tt_get_glyph_size(true_type_font *font, z_ucs char_code,
   int result;
   long new_glyph_cache_size;
 
+  TRACE_LOG("tt_get_glyph_size invoked.\n");
+
+  TRACE_LOG("Looking at %p\n", font->glyph_size_cache);
   if ((font->glyph_size_cache == NULL)
       || (font->glyph_size_cache_size < char_code)) {
 
@@ -118,9 +121,14 @@ int tt_get_glyph_size(true_type_font *font, z_ucs char_code,
     font->glyph_size_cache_size = new_glyph_cache_size;
   }
 
+  TRACE_LOG("Access glyph cache at %p.\n",
+      &font->glyph_size_cache[char_code].is_valid);
+
   if (font->glyph_size_cache[char_code].is_valid == 1) {
     TRACE_LOG("found glyph size cache hit for %c/%d.\n", char_code, char_code);
 
+    TRACE_LOG("Reading from glyph cache at %p.\n",
+        &font->glyph_size_cache[char_code].advance);
     *advance = font->glyph_size_cache[char_code].advance;
     *bitmap_width = font->glyph_size_cache[char_code].bitmap_width;
 
@@ -128,9 +136,12 @@ int tt_get_glyph_size(true_type_font *font, z_ucs char_code,
   }
   else {
     TRACE_LOG("no glyph size cache hit for %c/%d.\n", char_code, char_code);
+    TRACE_LOG("font: %p.\n", font);
     result = get_glyph_size(font, char_code, advance, bitmap_width);
 
     if (result == 0) {
+      TRACE_LOG("Writin to glyph cache at %p.\n",
+          &font->glyph_size_cache[char_code].advance);
       font->glyph_size_cache[char_code].is_valid = 1;
       font->glyph_size_cache[char_code].advance = *advance;
       font->glyph_size_cache[char_code].bitmap_width = *bitmap_width;

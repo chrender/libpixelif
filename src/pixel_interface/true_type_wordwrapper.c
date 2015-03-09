@@ -400,7 +400,10 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
         }
         else {
           // Otherwise, we simply break after the last word.
-          TRACE_LOG("break at %ld, 2\n", wrapper->last_word_end_index + 1);
+          TRACE_LOG("break at %ld, pixel: %d.\n",
+              wrapper->last_word_end_index + 1,
+              wrapper->current_advance_position);
+
           flush_index = wrapper->last_word_end_index;
 
           flush_line(wrapper, flush_index, true);

@@ -3,7 +3,7 @@
  *
  * This file is part of fizmo.
  *
- * Copyright (c) 2011-2014 Christoph Ender.
+ * Copyright (c) 2011-2015 Christoph Ender.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -121,7 +121,9 @@ static int screen_height_in_pixel = -1;
 static int total_screen_width_in_pixel = -1;
 static int screen_width_without_scrollbar = -1;
 static int nof_active_z_windows = 0;
+static int nof_total_z_windows = 0;
 static int statusline_window_id = -1;
+static int measurement_window_id = -1;
 static int custom_left_margin = 8;
 static int custom_right_margin = 8;
 static int v3_status_bar_left_margin = 5;
@@ -185,7 +187,7 @@ static history_output *history = NULL; // shared by upscroll and screen-refresh
 static bool input_line_on_screen = false;
 static int nof_input_lines = 0;
 static z_ucs *current_input_buffer = NULL;
-//static z_ucs newline_string[] = { '\n', 0 };
+static z_ucs newline_string[] = { '\n', 0 };
 
 static bool timed_input_active;
 
@@ -213,6 +215,8 @@ static int font_height_in_pixel = 14;
 static char last_font_size_config_value_as_string[MAX_VALUE_AS_STRING_LEN];
 static long total_lines_in_history = 0;
 static bool history_has_to_be_remeasured = false;
+//static true_type_wordwrapper *measurement_wordwrapper = NULL;
+static long total_nof_lines_stored = 0;
 
 //static z_ucs newline_string[] = { Z_UCS_NEWLINE, 0 };
 
@@ -225,7 +229,11 @@ static char *config_option_names[] = {
 
 
 static int process_glyph_string(z_ucs *z_ucs_output, int window_number,
-    true_type_font *font, bool *no_more_space, bool measurement_only);
+    true_type_font *font, bool *no_more_space);
+static void wordwrap_output_style(void *window_number, uint32_t style_data);
+static true_type_font *evaluate_font(z_style text_style, z_font font);
+static history_output_target history_target;
+static void z_ucs_output(z_ucs *z_ucs_output);
 
 
 static void clear_to_eol(int window_number) {
@@ -321,50 +329,243 @@ static void refresh_scrollbar() {
 }
 
 
+/*
+static void measurement_set_text_style(z_style text_style) {
+  if (bool_equal(z_windows[0]->buffering, false))
+    z_windows[0]->output_text_style = text_style;
+  else
+    freetype_wordwrap_insert_metadata(
+        measurement_wordwrapper,
+        &wordwrap_output_style,
+        (void*)(&z_windows[0]->window_number),
+        (uint32_t)text_style,
+        evaluate_font(
+          z_windows[0]->current_wrapper_style,
+          z_windows[0]->current_wrapper_font));
+}
+
+
+static void measurement_set_colour(z_colour foreground, z_colour background,
+    int16_t window_number) {
+}
+
+
+static void measurement_set_font(z_font font) {
+  if (bool_equal(z_windows[0]->buffering, false)) {
+    z_windows[0]->output_font = font;
+    update_window_true_type_font(0);
+  }
+  else {
+    z_windows[0]->current_wrapper_font = font;
+    freetype_wordwrap_insert_metadata(
+        z_windows[0]->wordwrapper,
+        &wordwrap_output_font,
+        (void*)(&z_windows[0]->window_number),
+        (uint32_t)font,
+        evaluate_font(
+          z_windows[0]->current_wrapper_style,
+          z_windows[0]->current_wrapper_font));
+  }
+}
+
+
+static void z_ucs_output_measurement_target(z_ucs *z_ucs_output,
+    void *window_number_as_void) {
+  //int window_number = *((int*)window_number_as_void);
+
+  TRACE_LOG("measuring glyph string: \"");
+  TRACE_LOG_Z_UCS(z_ucs_output);
+  TRACE_LOG("\".\n");
+  process_glyph_string(
+      z_ucs_output,
+      0,
+      z_windows[0]->output_true_type_font,
+      NULL,
+      true);
+}
+
+
+static void measurement_z_ucs_output(z_ucs *z_ucs_output) {
+  TRACE_LOG("Measurement-output: \"");
+  TRACE_LOG_Z_UCS(z_ucs_output);
+  TRACE_LOG(".\n");
+
+
+  if ( (z_ucs_output != NULL) && (*z_ucs_output != 0) ) {
+    if (bool_equal(z_windows[0]->buffering, false)) {
+      z_ucs_output_measurement_target(
+          z_ucs_output,
+          NULL); //(void*)(&z_windows[0]->window_number));
+    }
+    else {
+      freetype_wrap_z_ucs(measurement_wordwrapper, z_ucs_output);
+    }
+    TRACE_LOG("measurement-z_ucs_output finished.\n");
+  }
+}
+
+
+static history_output_target measurement_history_target =
+{
+  &measurement_set_text_style,
+  &measurement_set_colour,
+  &measurement_set_font,
+  &measurement_z_ucs_output
+};
+*/
+
+
+static void switch_to_window(int window_id) {
+  TRACE_LOG("Switching to window %d.\n", window_id);
+
+  active_z_window_id = window_id;
+  //refresh_cursor(active_z_window_id);
+}
+
+
 static int get_next_event_wrapper(z_ucs *input, int timeout_millis) {
-  int event_type, result;
+  int event_type = EVENT_WAS_NOTHING, last_active_z_window_id;
 
   TRACE_LOG("get_next_event_wrapper, history_has_to_be_remeasured: %d.\n",
       history_has_to_be_remeasured);
 
-  /*
-  while (history_has_to_be_remeasured == true) {
+  if (history_has_to_be_remeasured == true) {
 
-    if (history == NULL) {
-      TRACE_LOG("creating output history for re-measurement.");
+    TRACE_LOG("total_nof_lines_stored: %d\n", total_nof_lines_stored);
 
-      if ((history = init_history_output(outputhistory[0], &history_target))
-          == NULL) {
-        TRACE_LOG("Could not create history.\n");
-      }
+    z_windows[measurement_window_id]->ypos
+      = z_windows[0]->ypos;
+    z_windows[measurement_window_id]->xpos
+      = z_windows[0]->xpos;
+    /*
+    z_windows[measurement_window_id]->text_style
+      = z_windows[0]->text_style;
+    z_windows[measurement_window_id]->output_text_style
+      = z_windows[0]->output_text_style;
+    z_windows[measurement_window_id]->font_type
+      = z_windows[0]->font_type;
+    z_windows[measurement_window_id]->output_font
+      = z_windows[0]->output_font;
+    z_windows[measurement_window_id]->output_true_type_font
+      = z_windows[0]->output_true_type_font;
+      */
+    z_windows[measurement_window_id]->nof_consecutive_lines_output
+      = 0;
+    z_windows[measurement_window_id]->nof_lines_in_current_paragraph
+      = 1;
+    z_windows[measurement_window_id]->ysize
+      = z_windows[0]->ysize;
+    z_windows[measurement_window_id]->xsize
+      = z_windows[0]->xsize;
+    z_windows[measurement_window_id]->scrolling_active
+      = true;
+    z_windows[measurement_window_id]->stream2copying_active
+      = true;
+    z_windows[measurement_window_id]->leftmargin
+      = z_windows[0]->leftmargin;
+    z_windows[measurement_window_id]->rightmargin
+      = z_windows[0]->rightmargin;
+    /*
+    z_windows[measurement_window_id]->font_type
+      = z_windows[0]->font_type;
+      */
+    z_windows[measurement_window_id]->lower_padding
+      = z_windows[0]->lower_padding;
+    z_windows[measurement_window_id]->newline_routine
+      = 0;
+    z_windows[measurement_window_id]->interrupt_countdown
+      = 0;
+    /*
+    z_windows[measurement_window_id]->background_colour
+      = z_windows[0]->background_colour;
+    z_windows[measurement_window_id]->output_background_colour
+      = z_windows[0]->output_background_colour;
+    z_windows[measurement_window_id]->foreground_colour
+      = z_windows[0]->foreground_colour;
+    z_windows[measurement_window_id]->output_foreground_colour
+      = z_windows[0]->output_foreground_colour;
+      */
+    z_windows[measurement_window_id]->line_count
+      = 0;
+    z_windows[measurement_window_id]->wrapping
+      = true;
+    z_windows[measurement_window_id]->buffering
+      = true;
+    z_windows[measurement_window_id]->current_wrapper_style
+      = z_windows[measurement_window_id]->text_style;
+    z_windows[measurement_window_id]->current_wrapper_font
+      = z_windows[measurement_window_id]->font_type;
 
-      result = output_rewind_paragraph(history, NULL, NULL, NULL);
+    z_windows[measurement_window_id]->xcursorpos
+      = z_windows[measurement_window_id]->leftmargin;
+    z_windows[measurement_window_id]->rightmost_filled_xpos
+      = z_windows[measurement_window_id]->xcursorpos;
+    z_windows[measurement_window_id]->last_gylphs_xcursorpos
+      = -1;
 
-      if (result == 1) {
-        destroy_history_output(history);
-        history = NULL;
-        history_has_to_be_remeasured = false;
-      }
-      else if (result == 0) {
-      }
-      else {
-        TRACE_LOG("Error during rewind..\n");
-        destroy_history_output(history);
-        history = NULL;
-        history_has_to_be_remeasured = false;
-      }
+    TRACE_LOG("adj measurement-wrap: %d, %d, %d\n",
+        z_windows[measurement_window_id]->xsize,
+        z_windows[measurement_window_id]->rightmargin,
+        z_windows[measurement_window_id]->leftmargin);
+
+    freetype_wordwrap_adjust_line_length(
+        z_windows[measurement_window_id]->wordwrapper,
+        z_windows[measurement_window_id]->xsize
+        - z_windows[measurement_window_id]->rightmargin
+        - z_windows[measurement_window_id]->leftmargin);
+
+    last_active_z_window_id = active_z_window_id;
+    switch_to_window(measurement_window_id);
+    disable_more_prompt = true;
+
+    if (history != NULL) {
+      TRACE_LOG("History set, must not happen.\n");
+      return -1;
     }
 
-    TRACE_LOG("Polling for next event.\n");
-    event_type = screen_pixel_interface->get_next_event(
-        input, timeout_millis, true);
+    TRACE_LOG("creating output history for re-measurement.\n");
+
+    if ((history = init_history_output(
+            outputhistory[0],
+            &history_target,
+            Z_HISTORY_OUTPUT_FROM_BUFFERBACK
+            + Z_HISTORY_OUTPUT_WITHOUT_VALIDATION)) == NULL) {
+      TRACE_LOG("Could not create history.\n");
+    }
+
+    while ( (history_has_to_be_remeasured == true)
+        && (event_type == EVENT_WAS_NOTHING) ) {
+
+      if (output_repeat_paragraphs(history, 1, true, true) < 0) {
+        TRACE_LOG("output_repeat_paragraphs returned < 0.\n");
+        flush_window(measurement_window_id);
+        history_has_to_be_remeasured = false;
+      }
+      else {
+        z_ucs_output(newline_string);
+      }
+
+      TRACE_LOG("Polling for next event.\n");
+
+      event_type = screen_pixel_interface->get_next_event(
+          input, timeout_millis, true);
+      TRACE_LOG("event_type: %d\n", event_type);
+    }
+
+    destroy_history_output(history);
+    history = NULL;
+    disable_more_prompt = false;
+    switch_to_window(last_active_z_window_id);
+
+    TRACE_LOG("Consecutive measurement lines: %d.\n",
+        z_windows[measurement_window_id]->nof_consecutive_lines_output);
 
     if (event_type != EVENT_WAS_NOTHING) {
       return event_type;
     }
   }
+
   TRACE_LOG("Waiting for next event.\n");
-  */
 
   return screen_pixel_interface->get_next_event(input, timeout_millis, false);
 }
@@ -373,7 +574,7 @@ static int get_next_event_wrapper(z_ucs *input, int timeout_millis) {
 // Will return true in case break_line was successful and the cursor is now
 // on a fresh line, false otherwise (if, for example, scrolling is disabled
 // and the cursor is on the bottom-right position of the window).
-static bool break_line(int window_number, bool measurement_only) {
+static bool break_line(int window_number) {
   z_ucs input;
   int event_type;
   int pixels_to_scroll_up, i;
@@ -381,7 +582,7 @@ static bool break_line(int window_number, bool measurement_only) {
   //printf("Breaking line.\n");
   TRACE_LOG("Breaking line.\n");
 
-  if (measurement_only == false) {
+  if (window_number != measurement_window_id) {
     clear_to_eol(window_number);
 
     // We'll calculate the space we need below the current y_size that we need
@@ -414,6 +615,7 @@ static bool break_line(int window_number, bool measurement_only) {
   else {
     z_windows[window_number]->xcursorpos = 0;
 
+    // pixels_to_scroll_up will be == 0 when measurement_only == true.
     if (pixels_to_scroll_up > 0) {
       //printf("scrolling line up by %d pixels.\n", pixels_to_scroll_up);
       TRACE_LOG("scrolling line up by %d pixels.\n", pixels_to_scroll_up);
@@ -465,7 +667,7 @@ static bool break_line(int window_number, bool measurement_only) {
     else {
       //printf("breaking line, moving cursor down, no scrolling.\n");
       TRACE_LOG("breaking line, moving cursor down, no scrolling necessary.\n");
-      if (measurement_only == false) {
+      if (window_number != measurement_window_id) {
         z_windows[window_number]->ycursorpos += line_height;
       }
     }
@@ -481,7 +683,7 @@ static bool break_line(int window_number, bool measurement_only) {
   z_windows[window_number]->nof_consecutive_lines_output++;
   z_windows[window_number]->nof_lines_in_current_paragraph++;
 
-  if (measurement_only == false) {
+  if (window_number != measurement_window_id) {
     TRACE_LOG("consecutive lines: %d.\n",
         z_windows[window_number]->nof_consecutive_lines_output);
     TRACE_LOG("lines in current paragraph: %d.\n",
@@ -508,8 +710,7 @@ static bool break_line(int window_number, bool measurement_only) {
           libpixelif_more_prompt,
           window_number,
           z_windows[window_number]->output_true_type_font,
-          NULL,
-          false);
+          NULL);
       clear_to_eol(0);
 
       // In case we're just starting the story and there's no status line yet:
@@ -595,7 +796,7 @@ static int get_glyph_string_size(z_ucs *string_to_measure,
 // if scrolling_active is false and the cursor is on the window's
 // bottom-right position).
 static int process_glyph(z_ucs charcode, int window_number,
-    true_type_font *font, bool *no_more_space, bool measurement_only) {
+    true_type_font *font, bool *no_more_space) {
   int x, y, x_max, advance, bitmap_width, result = 0;
   bool reverse = false;
   z_rgb_colour foreground_colour, background_colour;
@@ -608,7 +809,7 @@ static int process_glyph(z_ucs charcode, int window_number,
   */
 
   if (charcode == Z_UCS_NEWLINE) {
-    if (break_line(window_number, measurement_only) == false) {
+    if (break_line(window_number) == false) {
       if (no_more_space != NULL)
         *no_more_space = true;
     }
@@ -659,15 +860,17 @@ static int process_glyph(z_ucs charcode, int window_number,
       + bitmap_width
       > z_windows[window_number]->xsize
       - z_windows[window_number]->rightmargin) {
-    if (break_line(window_number, measurement_only) == false) {
-      if (no_more_space != NULL)
+    TRACE_LOG("Breaking line at %d.\n", z_windows[window_number]->xcursorpos);
+    if (break_line(window_number) == false) {
+      if (no_more_space != NULL) {
         *no_more_space = true;
+      }
       return 0;
     }
     result = 1;
   }
 
-  if (measurement_only == false) {
+  if (window_number != measurement_window_id) {
     x = z_windows[window_number]->xpos
       + z_windows[window_number]->leftmargin
       + z_windows[window_number]->xcursorpos;
@@ -719,9 +922,13 @@ static int process_glyph(z_ucs charcode, int window_number,
 // if scrolling_active is false and the cursor is on the window's
 // bottom-right position).
 static int process_glyph_string(z_ucs *z_ucs_output, int window_number,
-    true_type_font *font, bool *no_more_space, bool measurement_only) {
+    true_type_font *font, bool *no_more_space) {
   bool my_no_more_space = false;
   int result = 0;
+
+  TRACE_LOG("Processing glyph string: \"");
+  TRACE_LOG_Z_UCS(z_ucs_output);
+  TRACE_LOG("\" for window %d.\n", window_number);
 
   /*
   int i = 0;
@@ -739,8 +946,7 @@ static int process_glyph_string(z_ucs *z_ucs_output, int window_number,
         *z_ucs_output,
         window_number,
         font,
-        &my_no_more_space,
-        measurement_only);
+        &my_no_more_space);
     z_ucs_output++;
   }
 
@@ -851,14 +1057,6 @@ static void wordwrap_output_font(void *window_number, uint32_t font_data) {
 }
 
 
-static void switch_to_window(int window_id) {
-  TRACE_LOG("Switching to window %d.\n", window_id);
-
-  active_z_window_id = window_id;
-  //refresh_cursor(active_z_window_id);
-}
-
-
 static void flush_all_buffered_windows() {
   int i;
 
@@ -879,8 +1077,7 @@ void z_ucs_output_window_target(z_ucs *z_ucs_output,
       z_ucs_output,
       window_number,
       z_windows[window_number]->output_true_type_font,
-      NULL,
-      false);
+      NULL);
 }
 
 
@@ -1439,9 +1636,13 @@ static void link_interface_to_story(struct z_story *story) {
     nof_active_z_windows++;
   }
 
-  TRACE_LOG("Number of active windows: %d.\n", nof_active_z_windows);
+  measurement_window_id = nof_active_z_windows;
+  nof_total_z_windows = nof_active_z_windows + 1;
 
-  bytes_to_allocate = sizeof(struct z_window*) * nof_active_z_windows;
+  TRACE_LOG("Number of active windows: %d.\n", nof_active_z_windows);
+  TRACE_LOG("Number of total windows: %d.\n", nof_total_z_windows);
+
+  bytes_to_allocate = sizeof(struct z_window*) * nof_total_z_windows;
 
   z_windows = (struct z_window**)fizmo_malloc(bytes_to_allocate);
 
@@ -1557,16 +1758,21 @@ static void link_interface_to_story(struct z_story *story) {
       = z_windows[i]->xcursorpos;
   }
 
-  active_z_window_id = 0;
+  z_windows[measurement_window_id]
+    = (struct z_window*)fizmo_malloc(bytes_to_allocate);
+  z_windows[measurement_window_id]->window_number
+    = measurement_window_id;
+  z_windows[measurement_window_id]->wordwrapper
+    = create_true_type_wordwrapper(
+        regular_font,
+        z_windows[measurement_window_id]->xsize
+        - z_windows[measurement_window_id]->leftmargin
+        - z_windows[measurement_window_id]->rightmargin,
+        &z_ucs_output_window_target,
+        (void*)(&z_windows[measurement_window_id]->window_number),
+        hyphenation_enabled);
 
-  /*
-  refresh_wordwrapper = create_true_type_wordwrapper(
-      regular_font,
-      z_windows[0]->xsize-z_windows[0]->leftmargin-z_windows[0]->rightmargin,
-      &z_ucs_output_refresh_destination,
-      NULL,
-      hyphenation_enabled);
-  */
+  active_z_window_id = 0;
 
   // First, set default colors for the screen, then clear it to correctly
   // initialize everything with the desired colors.
@@ -1666,7 +1872,10 @@ static int pixel_close_interface(z_ucs *error_message) {
 
   screen_pixel_interface->close_interface(error_message);
 
-  for (i=0; i<nof_active_z_windows; i++) {
+  for (i=0; i<nof_total_z_windows; i++) {
+    if (z_windows[i]->wordwrapper != NULL) {
+      destroy_freetype_wrapper(z_windows[i]->wordwrapper);
+    }
     free(z_windows[i]);
   }
   free(z_windows);
@@ -1796,12 +2005,21 @@ static void split_window(int16_t nof_lines) {
 
 
 static void set_text_style(z_style text_style) {
-  int i;
+  int i, start_win_id, end_win_id;
 
   //printf("New text style is %d.\n", text_style);
   TRACE_LOG("New text style is %d.\n", text_style);
 
-  for (i=0; i<nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0); i++) {
+  if (active_z_window_id == measurement_window_id) {
+    start_win_id = measurement_window_id;
+    end_win_id = measurement_window_id;
+  }
+  else {
+    start_win_id = 0;
+    end_win_id = nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0);
+  }
+
+  for (i=start_win_id; i<=end_win_id; i++) {
     TRACE_LOG("Evaluating style for window %d.\n", i);
     if (bool_equal(z_windows[i]->buffering, false)) {
       if (text_style & Z_STYLE_NONRESET)
@@ -1853,7 +2071,11 @@ static void set_colour(z_colour foreground, z_colour background,
   highest_valid_window_id
     = nof_active_z_windows - (statusline_window_id >= 0 ? 2 : 1);
 
-  if (window_number == -1) {
+  if (active_z_window_id == measurement_window_id) {
+    index = measurement_window_id;
+    end_index = measurement_window_id;
+  }
+  else if (window_number == -1) {
     index = 0;
     end_index = highest_valid_window_id;
   }
@@ -1862,8 +2084,9 @@ static void set_colour(z_colour foreground, z_colour background,
     index = window_number;
     end_index = window_number;
   }
-  else
+  else {
     return;
+  }
 
   while (index <= end_index) {
     TRACE_LOG("Processing window %d.\n", index);
@@ -1891,7 +2114,7 @@ static void set_colour(z_colour foreground, z_colour background,
 
 
 static void set_font(z_font font) {
-  int i;
+  int i, start_win_id, end_win_id;
 
   // 8.7.2.4: An interpreter should use a fixed-pitch font when printing
   // on the upper window.
@@ -1903,8 +2126,17 @@ static void set_font(z_font font) {
 
   TRACE_LOG("New font is %d.\n", font);
 
-  for (i=0; i<nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0); i++) {
+  if (active_z_window_id == measurement_window_id) {
+    start_win_id = measurement_window_id;
+    end_win_id = measurement_window_id;
+  }
+  else {
+    start_win_id = 0;
+    end_win_id = nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0);
+  }
 
+
+  for (i=start_win_id; i<=end_win_id; i++) {
     if (i != 1) {
       if (bool_equal(z_windows[i]->buffering, false)) {
         z_windows[i]->output_font = font;
@@ -2114,7 +2346,7 @@ static void refresh_input_line(bool display_cursor) {
   clear_input_line();
 
   nof_line_breaks
-    = process_glyph_string(current_input_buffer, 0, bold_font, NULL, false);
+    = process_glyph_string(current_input_buffer, 0, bold_font, NULL);
   TRACE_LOG("nof_line_breaks: %d\n", nof_line_breaks);
   TRACE_LOG("current_input_y: %d\n", *current_input_y);
   nof_new_input_lines = nof_line_breaks - (nof_input_lines - 1);
@@ -2139,10 +2371,10 @@ static void refresh_input_line(bool display_cursor) {
 static void show_status(z_ucs *room_description, int status_line_mode,
     int16_t parameter1, int16_t parameter2) {
   int rightside_char_length, rightside_pixel_length, right_pos;
-  int room_desc_space;
+  //int room_desc_space;
   static int rightside_buf_zucs_len = 0;
   static z_ucs *rightside_buf_zucs = NULL;
-  z_ucs buf = 0;
+  //z_ucs buf = 0;
   z_ucs *ptr;
   static char latin1_buf1[8];
   static char latin1_buf2[8];
@@ -2337,8 +2569,7 @@ static void refresh_upper_window() {
             upper_window_buffer->width*y + x].character,
             1,
             z_windows[1]->output_true_type_font,
-            NULL,
-            false);
+            NULL);
       }
     }
     z_windows[1]->xcursorpos = xcurs_buf;
@@ -2368,7 +2599,10 @@ static void refresh_screen() {
   //screen_pixel_interface->set_text_style(0);
   erase_window(0);
 
-  if ((history = init_history_output(outputhistory[0], &history_target))
+  if ((history = init_history_output(
+          outputhistory[0],
+          &history_target,
+          Z_HISTORY_OUTPUT_WITHOUT_EXTRAS))
       == NULL)
     return;
   TRACE_LOG("History: %p\n", history);
@@ -2476,7 +2710,7 @@ static void refresh_screen() {
 
   disable_more_prompt = false;
   TRACE_LOG("Setting history_has_to_be_remeasured to true.\n");
-  //history_has_to_be_remeasured = true;
+  history_has_to_be_remeasured = true;
 }
 
 
@@ -2625,8 +2859,10 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
     // text is not right-aligned -- we need to evaluate the entire last
     // paragraph to find the correct input start position.
 
-    if ((preload_history = init_history_output(outputhistory[0],
-            &preload_history_target)) != NULL) {
+    if ((preload_history = init_history_output(
+            outputhistory[0],
+            &preload_history_target,
+            Z_HISTORY_OUTPUT_WITHOUT_EXTRAS)) != NULL) {
 
       TRACE_LOG("History: %p\n", preload_history);
 
@@ -3433,6 +3669,7 @@ static void pixelif_paragraph_attribute_function(int *parameter1,
   //    z_windows[active_z_window_id]->nof_lines_in_current_paragraph);
   *parameter1 = z_windows[active_z_window_id]->nof_lines_in_current_paragraph;
   *parameter2 = z_windows[0]->xsize;
+  total_nof_lines_stored += *parameter1;
   return;
 }
 
@@ -3557,11 +3794,9 @@ void new_pixel_screen_size(int newysize, int newxsize) {
       }
     }
 
-    /*
-    printf("New line length for window %i: %d.\n", i,
+    TRACE_LOG("New line length for window %i: %d.\n", i,
         z_windows[i]->xsize - z_windows[i]->rightmargin
         - z_windows[i]->leftmargin);
-    */
     freetype_wordwrap_adjust_line_length(
         z_windows[i]->wordwrapper,
         z_windows[i]->xsize - z_windows[i]->rightmargin
