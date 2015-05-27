@@ -160,7 +160,12 @@ int tt_get_glyph_size(true_type_font *font, z_ucs char_code,
 // by using "sourcesanspro-it.ttf" in etude.z5 section 4 and looking at
 // "test of italic (or underlined) text." where the closing bracket
 // overwrites the right d's vertical stroke.
+// If clip_top or clip_bottom are > 0, this amount of pixels is skipped
+// when drawing the glyph. For example, when y=10, clip_top=10 and
+// clip_bottom=5 and the vertical size of the glyph is 20, only the
+// pixels 10, 11, 12, 13 and 14 are addressed on screen.
 int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
+    int clip_top, int clip_bottom,
     z_rgb_colour foreground_colour,
     z_rgb_colour background_colour,
     struct z_screen_pixel_interface *screen_pixel_interface,
@@ -193,6 +198,14 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
   bitmap = slot->bitmap;
   advance = slot->advance.x / 64;
   draw_width = advance > bitmap.width ? advance : bitmap.width;
+
+  if (clip_top < 0) {
+    clip_top = 0;
+  }
+
+  if (clip_bottom < 0) {
+    clip_bottom = 0;
+  }
 
   //printf("last_gylphs_xcursorpos: %d, x: %d.\n", *last_gylphs_xcursorpos, x);
   if ((last_gylphs_xcursorpos) && (*last_gylphs_xcursorpos >= 0)) {
@@ -272,7 +285,10 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
   */
   TRACE_LOG("Glyph display at %d / %d.\n", x, y);
   if (bitmap.pixel_mode == FT_PIXEL_MODE_LCD) {
-    for (bitmap_y=0; bitmap_y<bitmap.rows; bitmap_y++, screen_y++) {
+    for (
+        bitmap_y=clip_top;
+        bitmap_y<bitmap.rows - clip_bottom;
+        bitmap_y++, screen_y++) {
       screen_x = start_x;
       for (bitmap_x=0; bitmap_x<bitmap.width; bitmap_x+=3, screen_x++) {
         pixel = bitmap.buffer[bitmap_y*bitmap.pitch+ bitmap_x];
