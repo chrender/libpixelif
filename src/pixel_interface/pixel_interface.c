@@ -297,8 +297,8 @@ static void clear_to_eol(int window_number) {
        + z_windows[window_number]->ycursorpos),
       width,
       height,
-      z_to_rgb_colour(z_windows[window_number]->output_background_colour));
       //z_to_rgb_colour(Z_COLOUR_BLUE));
+      z_to_rgb_colour(z_windows[window_number]->output_background_colour));
 }
 
 
@@ -2772,9 +2772,6 @@ void handle_scrolling(int event_type) {
 
   TRACE_LOG("Starting handle_scrolling.\n");
 
-  if (event_type == EVENT_WAS_CODE_PAGE_DOWN)
-    return;
-
   if ( (event_type == EVENT_WAS_CODE_PAGE_DOWN)
       && (top_upscroll_line <= z_windows[0]->ysize) ) {
     TRACE_LOG("Already at bottom.\n");
@@ -2867,8 +2864,8 @@ void handle_scrolling(int event_type) {
         z_windows[0]->ypos,
         z_windows[0]->xsize,
         redraw_pixel_lines_to_draw,
+        //z_to_rgb_colour(Z_COLOUR_RED));
         z_to_rgb_colour(z_windows[0]->output_background_colour));
-    //z_to_rgb_colour(Z_COLOUR_RED));
     //screen_pixel_interface->update_screen();
     //event_type = get_next_event_wrapper(&input, 0);
 
@@ -2879,11 +2876,48 @@ void handle_scrolling(int event_type) {
     top_line_to_draw = 0;
   }
   else if (event_type == EVENT_WAS_CODE_PAGE_DOWN) {
-    if (top_upscroll_line > 0) {
+
+    top_upscroll_line -= (z_windows[0]->ysize / 2);
+
+    if (top_upscroll_line < z_windows[0]->ysize) {
+      top_upscroll_line = z_windows[0]->ysize - 1;
     }
 
-    // Just for testing:
-    redraw_pixel_lines_to_draw = 0;
+    lines_to_copy
+      = z_windows[0]->ysize
+      - (previous_upscroll_position - top_upscroll_line);
+
+    TRACE_LOG("top_upscroll_line: %d.\n", top_upscroll_line);
+    TRACE_LOG("lines_to_copy: %d.\n", lines_to_copy);
+    TRACE_LOG("history_screen_line: %d.\n", history_screen_line);
+
+    screen_pixel_interface->copy_area(
+        z_windows[active_z_window_id]->ypos,
+        z_windows[active_z_window_id]->xpos,
+        z_windows[active_z_window_id]->ypos
+        + z_windows[0]->ysize - lines_to_copy,
+        z_windows[active_z_window_id]->xpos,
+        lines_to_copy,
+        z_windows[active_z_window_id]->xsize);
+    //screen_pixel_interface->update_screen();
+    //event_type = get_next_event_wrapper(&input, 0);
+
+    redraw_pixel_lines_to_draw = z_windows[0]->ysize - lines_to_copy;
+    top_line_to_draw = z_windows[0]->ysize - redraw_pixel_lines_to_draw;
+
+    screen_pixel_interface->fill_area(
+        z_windows[0]->xpos,
+        z_windows[0]->ypos + top_line_to_draw,
+        z_windows[0]->xsize,
+        redraw_pixel_lines_to_draw,
+        //z_to_rgb_colour(Z_COLOUR_RED));
+        z_to_rgb_colour(z_windows[0]->output_background_colour));
+    //screen_pixel_interface->update_screen();
+    //event_type = get_next_event_wrapper(&input, 0);
+
+    TRACE_LOG("history_screen_line: %d.\n", history_screen_line);
+    //saved_padding = z_windows[0]->lower_padding;
+    //z_windows[0]->lower_padding += lines_to_copy;
   }
   else {
     // Neither up nor down?
@@ -2929,15 +2963,15 @@ void handle_scrolling(int event_type) {
           history_screen_line);
     }
 
-    //printf("tusl: %d, h*l*lp:%d\n", top_upscroll_line + 1,
-    //    (nof_input_lines - 1 + history_screen_line) * line_height
-    //    + z_windows[0]->lower_padding);
+   // printf("tusl: %d, h*l*lp:%d\n", top_upscroll_line + 1,
+   //     (nof_input_lines - 1 + history_screen_line) * line_height
+   //     + z_windows[0]->lower_padding);
   }
 
   redraw_pixel_lines_to_skip
     = ((nof_input_lines - 1 + history_screen_line) * line_height
         + z_windows[0]->lower_padding)
-    - top_upscroll_line - 1;
+    + top_line_to_draw - top_upscroll_line - 1;
   TRACE_LOG("redraw_pixel_lines_to_skip: %d.\n", redraw_pixel_lines_to_skip);
   //printf("redraw_pixel_lines_to_skip: %d.\n", redraw_pixel_lines_to_skip);
 
@@ -3936,6 +3970,11 @@ static struct z_screen_interface z_pixel_interface = {
 
 static void pixelif_paragraph_attribute_function(int *parameter1,
  int *parameter2) {
+  /*
+  printf("paragraph_attribute_function invoked, returning %d / %d.\n",
+      z_windows[active_z_window_id]->nof_lines_in_current_paragraph,
+      z_windows[0]->xsize);
+  */
   TRACE_LOG("paragraph_attribute_function invoked, returning %d / %d.\n",
       z_windows[active_z_window_id]->nof_lines_in_current_paragraph,
       z_windows[0]->xsize);
