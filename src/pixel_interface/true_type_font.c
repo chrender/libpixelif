@@ -181,7 +181,7 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
   float pixel_value2, pixel_value3;
   int dr, dg, db; // delta from foreground to background
   uint8_t br, bg, bb; // pre-evaluated background colors
-  int draw_width, bitmap_start_y, top_space;
+  int draw_width, bitmap_start_y, top_space, max_y;
 
   FT_UInt glyph_index = FT_Get_Char_Index(font->face, charcode);
 
@@ -244,14 +244,25 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
       background_colour);
 
   x += slot->bitmap_left;
+
   /*
   printf("y: %d, %d, %d\n",
       y, (int)font->face->size->metrics.ascender/64, (int)slot->bitmap_top);
   */
   //y += font->face->size->metrics.ascender/64 - slot->bitmap_top;
+
+  // Bitmaps for glyphs don't all have the same height. For smaller
+  // (e.g. lowercase) letters bitmaps may be smaller.
+  // To avoid drawing glyphs top-aligned we'll calculate the appropriate
+  // top_space we have to skip at the top.
   top_space
     = font->face->size->metrics.ascender/64
     - slot->bitmap_top;
+
+  max_y = y + font->line_height - clip_top - clip_bottom;
+
+  // In case we've got to clip some pixels at the top we'll adjust
+  // top_space (and clip_top) accordingly.
   if (clip_top > 0) {
     if (top_space > clip_top) {
       top_space -= clip_top;
@@ -262,10 +273,14 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
       top_space = 0;
     }
   }
+  if (y + top_space + (bitmap.rows - clip_top) < max_y) {
+    max_y = y + top_space + (bitmap.rows - clip_top);
+  }
   y += top_space;
+  bitmap_start_y = clip_top;
 
-  //printf("ascender: %ld\n", font->face->size->metrics.ascender/64);
-  //printf("bitmap_top: %d\n", slot->bitmap_top);
+  TRACE_LOG("ascender: %ld\n", font->face->size->metrics.ascender/64);
+  TRACE_LOG("bitmap_top: %d\n", slot->bitmap_top);
 
   // FIXME: Free glyph's memory.
   // FT_Done_FreeType
@@ -299,17 +314,23 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
       bitmap.width, bitmap.rows, charcode);
   */
   TRACE_LOG("Glyph display at %d / %d.\n", x, y);
+  TRACE_LOG("clip_top: %d, clip_bottom: %d.\n", clip_top, clip_bottom);
 
-  bitmap_start_y = clip_top;
     //= bitmap.rows > font->line_height - clip_top
     //? bitmap.rows - (font->line_height - clip_top)
     //: 0;
 
+  TRACE_LOG("bitmap.rows: %d, clip_bottom: %d, bitmap_start_y: %d.\n",
+      bitmap.rows, clip_bottom, bitmap_start_y);
+  TRACE_LOG("diff: %d.\n", bitmap.rows - clip_bottom);
+
   if (bitmap.pixel_mode == FT_PIXEL_MODE_LCD) {
     for (
         bitmap_y = bitmap_start_y;
-        bitmap_y < bitmap.rows - clip_bottom;
+        screen_y < max_y;
         bitmap_y++, screen_y++) {
+      TRACE_LOG("bitmap_y: %d, diff: %d.\n",
+          bitmap_y, bitmap.rows - clip_bottom);
       screen_x = start_x;
       for (bitmap_x=0; bitmap_x<bitmap.width; bitmap_x+=3, screen_x++) {
         pixel = bitmap.buffer[bitmap_y*bitmap.pitch+ bitmap_x];
@@ -332,8 +353,10 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
   else {
     for (
         bitmap_y = bitmap_start_y;
-        bitmap_y < bitmap.rows;
+        screen_y < max_y;
         bitmap_y++, screen_y++) {
+      TRACE_LOG("bitmap_y: %d, diff: %d.\n",
+          bitmap_y, bitmap.rows - clip_bottom);
       screen_x = start_x;
       for (bitmap_x=0; bitmap_x<bitmap.width; bitmap_x++, screen_x++) {
         pixel = bitmap.buffer[bitmap_y*bitmap.pitch+ bitmap_x];
