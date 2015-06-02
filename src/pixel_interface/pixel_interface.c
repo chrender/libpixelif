@@ -297,7 +297,6 @@ static void clear_to_eol(int window_number) {
        + z_windows[window_number]->ycursorpos),
       width,
       height,
-      //z_to_rgb_colour(Z_COLOUR_BLUE));
       z_to_rgb_colour(z_windows[window_number]->output_background_colour));
 }
 
@@ -604,7 +603,7 @@ static void reset_xcursorpos(int window_id) {
 static bool break_line(int window_number) {
   z_ucs input;
   int event_type;
-  int yspace_in_pixels, nof_lines_to_scroll, i;
+  int yspace_in_pixels, nof_lines_to_scroll, i, fill_ypos, fill_height;
 
   //printf("Breaking line.\n");
   TRACE_LOG("Breaking line for window %d.\n", window_number);
@@ -654,7 +653,7 @@ static bool break_line(int window_number) {
     if (window_number != measurement_window_id) {
       // Only adjust y in case we're not measuring.
 
-      if ((redraw_pixel_lines_to_draw == -1) 
+      if ((redraw_pixel_lines_to_draw == -1)
           && (yspace_in_pixels < line_height)) {
         // We know we never have to scroll in redraw_mode, so we can skip
         // this entire section when redrawing (which we determine by testing
@@ -804,13 +803,34 @@ static bool break_line(int window_number) {
       TRACE_LOG("more prompt finished: %d.\n", event_type);
     }
 
-    // Start new line: Fill right margin with background colour.
-    screen_pixel_interface->fill_area(
-        z_windows[window_number]->xpos,
-        z_windows[window_number]->ypos + z_windows[window_number]->ycursorpos,
-        z_windows[window_number]->leftmargin,
-        line_height,
-        z_to_rgb_colour(z_windows[window_number]->output_background_colour));
+    if ( (fill_ypos = z_windows[window_number]->ypos
+          + z_windows[window_number]->ycursorpos)
+        <= z_windows[window_number]->ypos + z_windows[window_number]->ysize) {
+
+      TRACE_LOG("fill_ypos: %d.\n", fill_ypos);
+      TRACE_LOG("ypos + ycursorpos: %d.\n", z_windows[window_number]->ypos
+          + z_windows[window_number]->ycursorpos);
+      TRACE_LOG("ypos + ysize: %d.\n", z_windows[window_number]->ypos
+          + z_windows[window_number]->ysize);
+
+      fill_height = line_height;
+
+      if (fill_ypos + fill_height
+          >= z_windows[window_number]->ypos + z_windows[window_number]->ysize) {
+        fill_height
+          = z_windows[window_number]->ypos + z_windows[window_number]->ysize
+          - fill_ypos;
+      }
+
+      // Start new line: Fill left margin with background colour.
+      screen_pixel_interface->fill_area(
+          z_windows[window_number]->xpos,
+          fill_ypos,
+          z_windows[window_number]->leftmargin,
+          fill_height,
+          z_to_rgb_colour(
+            z_windows[window_number]->output_background_colour));
+    }
   }
 
   return true;
@@ -968,6 +988,12 @@ static int process_glyph(z_ucs charcode, int window_number,
     TRACE_LOG("dg: %d: %d,%d\n", window_number,
         z_windows[window_number]->output_background_colour,
         z_windows[window_number]->output_foreground_colour);
+    TRACE_LOG("ypos: %d, ysize: %d, x: %d, y: %d.\n",
+        z_windows[window_number]->ypos,
+        z_windows[window_number]->ysize,
+        x,
+        y);
+
     z_windows[window_number]->rightmost_filled_xpos
       = tt_draw_glyph(
           font,
@@ -2757,6 +2783,19 @@ void preload_wrap_zucs_output(z_ucs *UNUSED(z_ucs_output),
 }
 
 
+void end_scrolling() {
+  // End up-scroll.
+  TRACE_LOG("Ending scrollback.\n");
+  top_upscroll_line = -1;
+  upscroll_hit_top = false;
+  destroy_history_output(history);
+  history = NULL;
+  redraw_pixel_lines_to_skip = 0;
+  redraw_pixel_lines_to_draw = -1;
+  screen_pixel_interface->set_cursor_visibility(true);
+}
+
+
 void handle_scrolling(int event_type) {
   int lines_to_copy, saved_padding; //, line_shift,
   int top_line_to_draw;
@@ -2864,7 +2903,6 @@ void handle_scrolling(int event_type) {
         z_windows[0]->ypos,
         z_windows[0]->xsize,
         redraw_pixel_lines_to_draw,
-        //z_to_rgb_colour(Z_COLOUR_RED));
         z_to_rgb_colour(z_windows[0]->output_background_colour));
     //screen_pixel_interface->update_screen();
     //event_type = get_next_event_wrapper(&input, 0);
@@ -2880,7 +2918,9 @@ void handle_scrolling(int event_type) {
     top_upscroll_line -= (z_windows[0]->ysize / 2);
 
     if (top_upscroll_line < z_windows[0]->ysize) {
-      top_upscroll_line = z_windows[0]->ysize - 1;
+      end_scrolling();
+      refresh_screen();
+      return;
     }
 
     lines_to_copy
@@ -2961,17 +3001,24 @@ void handle_scrolling(int event_type) {
     else if (return_code == 1) {
       TRACE_LOG("Hit buffer back while rewinding / %d.\n",
           history_screen_line);
+      history_screen_line
+        += paragraph_attr1 != 0 ? paragraph_attr1 : 1;
     }
 
-   // printf("tusl: %d, h*l*lp:%d\n", top_upscroll_line + 1,
-   //     (nof_input_lines - 1 + history_screen_line) * line_height
-   //     + z_windows[0]->lower_padding);
+    /*
+    printf("tusl: %d, h*l*lp:%d\n", top_upscroll_line + 1,
+        (nof_input_lines - 1 + history_screen_line) * line_height
+        + z_windows[0]->lower_padding);
+    */
   }
 
+  TRACE_LOG("top_line_to_draw: %d.\n", top_line_to_draw);
+
   redraw_pixel_lines_to_skip
-    = ((nof_input_lines - 1 + history_screen_line) * line_height
+    = ( (nof_input_lines - 1 + history_screen_line) * line_height
         + z_windows[0]->lower_padding)
-    + top_line_to_draw - top_upscroll_line - 1;
+    - (top_upscroll_line + 1)
+    + top_line_to_draw;
   TRACE_LOG("redraw_pixel_lines_to_skip: %d.\n", redraw_pixel_lines_to_skip);
   //printf("redraw_pixel_lines_to_skip: %d.\n", redraw_pixel_lines_to_skip);
 
@@ -3011,19 +3058,6 @@ void handle_scrolling(int event_type) {
   z_windows[0]->nof_consecutive_lines_output = 0;
 
   TRACE_LOG("End of handle_scrolling.\n");
-}
-
-
-void end_scrolling() {
-  // End up-scroll.
-  TRACE_LOG("Ending scrollback.\n");
-  top_upscroll_line = -1;
-  upscroll_hit_top = false;
-  destroy_history_output(history);
-  history = NULL;
-  redraw_pixel_lines_to_skip = 0;
-  redraw_pixel_lines_to_draw = -1;
-  screen_pixel_interface->set_cursor_visibility(true);
 }
 
 
