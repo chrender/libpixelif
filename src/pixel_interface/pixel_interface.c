@@ -3286,10 +3286,6 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
         if (input == Z_UCS_NEWLINE) {
           input_in_progress = false;
         }
-        else if (input == 12) {
-          TRACE_LOG("Got CTRL-L.\n");
-          refresh_screen();
-        }
         else if (
             // Check if we have a valid input char.
             (unicode_char_to_zscii_input_char(input) != 0xff)
@@ -3574,6 +3570,10 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
         //refresh_cursor(active_z_window_id);
         screen_pixel_interface->update_screen();
         */
+      }
+      else if (event_type == EVENT_WAS_CODE_CTRL_L) {
+        TRACE_LOG("Got CTRL-L.\n");
+        refresh_screen();
       }
       else if (event_type == EVENT_WAS_CODE_ESC) {
         if (return_on_escape == true) {
