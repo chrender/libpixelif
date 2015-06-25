@@ -2442,8 +2442,10 @@ static void refresh_input_line(bool display_cursor) {
     TRACE_LOG("current_input_y: %d, nof_input_lines:%d\n",
         *current_input_y, nof_input_lines);
   }
-  //printf("current_input_y: %d, nof_input_lines:%d\n",
+  /*
+  printf("current_input_y: %d, nof_input_lines:%d\n",
       *current_input_y, nof_input_lines);
+  */
 
   if (display_cursor == true) {
     draw_cursor();
