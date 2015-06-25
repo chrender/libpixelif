@@ -73,6 +73,7 @@ struct z_screen_pixel_interface
   void (*output_interface_info)();
   int (*get_screen_width_in_pixels)();
   int (*get_screen_height_in_pixels)();
+  double (*get_device_to_pixel_ratio)();
   void (*update_screen)();
   void (*redraw_screen_from_scratch)();
   void (*copy_area)(int dsty, int dstx, int srcy, int srcx, int height,
