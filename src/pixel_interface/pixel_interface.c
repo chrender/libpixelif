@@ -168,7 +168,7 @@ static true_type_font *fixed_bold_italic_font = NULL;
 static int line_height;
 static int fixed_width_char_width = 8;
 static true_type_wordwrapper *preloaded_wordwrapper;
-static int scrollbar_width = 13;
+static int scrollbar_width = 12;
 
 // Scrolling upwards:
 // It is always assumed that there's no output to window[0] and it's
@@ -219,7 +219,7 @@ static char *fixed_italic_font_filename = NULL;
 static char *fixed_bold_font_filename = NULL;
 static char *fixed_bold_italic_font_filename = NULL;
 static char *font_search_path = FONT_DEFAULT_SEARCH_PATH;
-static int font_height_in_pixel = 14;
+static int font_height_in_pixel = 13;
 static char last_font_size_config_value_as_string[MAX_VALUE_AS_STRING_LEN];
 static long total_lines_in_history = 0;
 static bool refresh_active = false; // When true, total_lines_in_history
@@ -2405,8 +2405,9 @@ static void clear_input_line() {
 static void refresh_input_line(bool display_cursor) {
   int nof_line_breaks, nof_new_input_lines;
   int last_active_z_window_id = -1;
-  if (input_line_on_screen == false)
+  if (input_line_on_screen == false) {
     return;
+  }
 
   TRACE_LOG("Refreshing input line.\n");
 
@@ -3793,6 +3794,8 @@ static int read_char(uint16_t tenth_seconds, uint32_t verification_routine,
   else
     timed_input_active = false;
 
+  nof_input_lines = 1;
+
   while (input_in_progress == true)
   {
     event_type = get_next_event_wrapper(&input, timeout_millis);
@@ -3897,6 +3900,8 @@ static int read_char(uint16_t tenth_seconds, uint32_t verification_routine,
       }
     }
   }
+
+  nof_input_lines = 0;
 
   return result;
 }
