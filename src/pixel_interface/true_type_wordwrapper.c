@@ -30,39 +30,26 @@
  */
 
 
-/*
-#include <string.h>
-#include <math.h>
-*/
-
-#include <ft2build.h>
-#include FT_FREETYPE_H
-
-/*
-#include "tools/i18n.h"
-#include "interpreter/cmd_hst.h"
-#include "interpreter/config.h"
-#include "interpreter/history.h"
-#include "interpreter/streams.h"
-#include "interpreter/text.h"
-#include "interpreter/wordwrap.h"
-#include "interpreter/zpu.h"
-#include "interpreter/output.h"
-
-#include "../screen_interface/screen_pixel_interface.h"
-#include "../locales/libpixelif_locales.h"
-*/
-
+//#include <ft2build.h>
+//#include FT_FREETYPE_H
 #include "true_type_wordwrapper.h"
 #include "tools/z_ucs.h"
 #include "tools/types.h"
 #include "tools/unused.h"
 #include "interpreter/fizmo.h"
 #include "tools/tracelog.h"
+#include "interpreter/hyphenation.h"
 
+
+static z_ucs newline_string[] = { Z_UCS_NEWLINE, 0 };
+static z_ucs minus_string[] = { Z_UCS_MINUS, 0 };
 
 static void set_font(true_type_wordwrapper *wrapper, true_type_font *new_font) {
   wrapper->current_font = new_font;
+  tt_get_glyph_size(wrapper->current_font, Z_UCS_MINUS,
+      &wrapper->space_bitmap_width, &wrapper->space_advance);
+  tt_get_glyph_size(wrapper->current_font, Z_UCS_MINUS,
+      &wrapper->dash_bitmap_width, &wrapper->dash_advance);
 }
 
 
@@ -140,8 +127,60 @@ int get_current_pixel_position(true_type_wordwrapper *wrapper) {
 }
 
 
+// This function will simply forget the first char in the input buffer. The
+// main work it has to do is to correctly adjust the metadata.
+void forget_first_char_in_buffer(true_type_wordwrapper *wrapper) {
+  int metadata_index = 0;
+  struct freetype_wordwrap_metadata *metadata_entry;
+  int i;
+
+  if (wrapper->current_buffer_index < 1) {
+    return;
+  }
+
+  while (metadata_index < wrapper->metadata_index) {
+    //printf("mdindex: %d\n", metadata_index);
+    if (wrapper->metadata[metadata_index].output_index > 0) {
+      break;
+    }
+
+    // There's actually metadata for the very first char in the buffer.
+
+    metadata_entry = &wrapper->metadata[metadata_index];
+
+    metadata_entry->metadata_output_function(
+        metadata_entry->ptr_parameter,
+        metadata_entry->int_parameter);
+
+    metadata_index++;
+  }
+
+  if (metadata_index > 0) {
+    //printf("Removing %d metadata entries.\n", metadata_index);
+    memmove(
+        wrapper->metadata,
+        &wrapper->metadata[metadata_index],
+        (wrapper->metadata_index - metadata_index) * sizeof(
+          struct freetype_wordwrap_metadata));
+    wrapper->metadata_index -= metadata_index;
+  }
+
+  for (i=0; i<wrapper->metadata_index; i++) {
+    wrapper->metadata[i].output_index -= 1;
+  }
+
+  //printf("Moving %ld chars.\n", (wrapper->current_buffer_index - 1));
+  memmove(
+      wrapper->input_buffer,
+      wrapper->input_buffer + 1,
+      (wrapper->current_buffer_index - 1) * sizeof(z_ucs));
+
+  wrapper->current_buffer_index--;
+}
+
+
 void flush_line(true_type_wordwrapper *wrapper, long flush_index,
-    bool append_newline) {
+    bool append_minus, bool append_newline) {
   z_ucs buf_1, buf_2;
   size_t chars_sent;
   int chars_to_move;
@@ -235,6 +274,7 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index,
     wrapper->metadata_index -= metadata_index;
   }
 
+  /*
   if (append_newline == true) {
     buf_1 = wrapper->input_buffer[flush_index + 1];
     buf_2 = wrapper->input_buffer[flush_index + 2];
@@ -264,6 +304,31 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index,
         wrapper->destination_parameter);
     wrapper->input_buffer[flush_index + 1] = buf_1;
   }
+  */
+
+  buf_1 = wrapper->input_buffer[flush_index + 1];
+  wrapper->input_buffer[flush_index + 1] = 0;
+  TRACE_LOG("flush-index: %d\n", flush_index);
+  TRACE_LOG("flush-line (%d / %p): \"", z_ucs_len(wrapper->input_buffer),
+      wrapper->input_buffer);
+  TRACE_LOG_Z_UCS(wrapper->input_buffer);
+  TRACE_LOG("\"\n");
+  wrapper->wrapped_text_output_destination(
+      wrapper->input_buffer + output_index,
+      wrapper->destination_parameter);
+  wrapper->input_buffer[flush_index + 1] = buf_1;
+
+  if (append_minus == true) {
+    wrapper->wrapped_text_output_destination(
+        minus_string,
+        wrapper->destination_parameter);
+  }
+
+  if (append_newline == true) {
+    wrapper->wrapped_text_output_destination(
+        newline_string,
+        wrapper->destination_parameter);
+  }
 
   chars_sent = flush_index + 1;
   TRACE_LOG("chars_sent: %ld, dst: %p, src: %p, bufindex: %d\n",
@@ -284,34 +349,13 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index,
 }
 
 
-/*
-static void process_line_end(true_type_wordwrapper *wrapper,
-    z_ucs current_char, z_ucs last_char) {
-  z_ucs buf_1;
-  long flush_index;
-
-  TRACE_LOG("lwei: %ld / lweap: %ld / lwewp: %ld / ll: %d\n",
-      wrapper->last_word_end_index,
-      wrapper->last_word_end_advance_position,
-      wrapper->last_word_end_width_position,
-      wrapper->line_length);
-
-  TRACE_LOG("before flush: width %d, linesize: %d\n",
-      wrapper->current_width_position, wrapper->line_length);
-
-  if (wrapper->current_width_position > wrapper->line_length) {
-  else {
-    if (current_char == Z_UCS_NEWLINE) {
-  }
-}
-*/
-
-
 void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
-  z_ucs *input_index = input;
-  z_ucs current_char, last_char; //, char_before_last_char;
+  z_ucs *hyphenated_word, *input_index = input;
+  z_ucs current_char, last_char, buf;
   int advance, bitmap_width;
-  long flush_index;
+  long flush_index, wrap_width_position, end_index, hyph_index;
+  long buf_index, last_valid_hyph_index;
+  bool breaking_on_dash;
 
   // In order to build an algorithm most suitable to both enabled and
   // disabled hyphenation, we'll collect input until we'll find the first
@@ -356,11 +400,187 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
 
     wrapper->current_buffer_index++;
 
-    if (current_char == Z_UCS_NEWLINE) {
+    tt_get_glyph_size(wrapper->current_font, current_char,
+        &advance, &bitmap_width);
+    wrapper->current_width_position
+      = wrapper->current_advance_position + bitmap_width;
+    /*
+       printf("current_width_position: %ld for '%c'\n",
+       wrapper->current_width_position, current_char);
+       */
+    wrapper->current_advance_position += advance;
+
+    /*
+       printf("check: %ld/%d/%ld\n",
+       wrapper->current_advance_position,
+       wrapper->line_length,
+       wrapper->last_word_end_index);
+       */
+
+    if (wrapper->current_width_position >= wrapper->line_length) {
+      /*
+      printf("linebehind: %ld, %d.\n",
+          wrapper->current_width_position, wrapper->line_length);
+      */
+
+      TRACE_LOG("Behind past line, match on space|newline, breaking.\n");
+      // In case we're past the right margin, we'll take a look how
+      // to best break the line.
+
+      if ((current_char == Z_UCS_SPACE) || (current_char == Z_UCS_NEWLINE) ) {
+        // Here we've found a completed word past the lind end. At this
+        // point we'll break the line without exception.
+        /*
+        printf("last_word_end_width_position: %ld, line_length: %d.\n", 
+            wrapper->last_word_end_width_position, wrapper->line_length);
+        */
+
+        if (wrapper->enable_hyphenation == true) {
+          end_index = wrapper->current_buffer_index - 2;
+          TRACE_LOG("end_index: %d / %c, lwei: %d\n",
+              end_index, wrapper->input_buffer[end_index],
+              wrapper->last_word_end_index);
+          while ( (end_index >= 0)
+              && (end_index > wrapper->last_word_end_index)
+              && ( (wrapper->input_buffer[end_index] == Z_UCS_COMMA)
+                || (wrapper->input_buffer[end_index] == Z_UCS_DOT) ) ) {
+            end_index--;
+          }
+          TRACE_LOG("end end_index: %d / %c, lwei: %d\n",
+              end_index, wrapper->input_buffer[end_index],
+              wrapper->last_word_end_index);
+          end_index++;
+          buf = wrapper->input_buffer[end_index];
+          wrapper->input_buffer[end_index] = 0;
+          if ((hyphenated_word = hyphenate(wrapper->input_buffer
+                  + wrapper->last_word_end_index + 1)) == NULL) {
+            TRACE_LOG("Error hyphenating.\n");
+          }
+          else {
+            TRACE_LOG("hyphenated word: \"");
+            TRACE_LOG_Z_UCS(hyphenated_word);
+            TRACE_LOG("\".\n");
+
+            wrap_width_position
+              = wrapper->last_word_end_advance_position
+              + wrapper->space_bitmap_width;
+            hyph_index = wrapper->last_word_end_index + 1;
+            buf_index = 0;
+            last_valid_hyph_index = -1;
+
+            while ( (buf_index < z_ucs_len(hyphenated_word))
+                && (wrap_width_position + wrapper->dash_bitmap_width
+                  <= wrapper->line_length) ) {
+              TRACE_LOG("Checking buf char %d / %c, hi:%d\n",
+                  buf_index, hyphenated_word[buf_index],
+                  hyph_index);
+
+              if (hyphenated_word[buf_index] == Z_UCS_SOFT_HYPEN) {
+                last_valid_hyph_index = hyph_index + 1;
+              }
+              else if (hyphenated_word[buf_index] == Z_UCS_MINUS) {
+                last_valid_hyph_index = hyph_index;
+              }
+
+              if (hyphenated_word[buf_index] != Z_UCS_SOFT_HYPEN) {
+                tt_get_glyph_size(wrapper->current_font,
+                    hyphenated_word[buf_index],
+                    &advance, &bitmap_width);
+                wrap_width_position += bitmap_width;
+                hyph_index++;
+              }
+              buf_index++;
+            }
+
+            free(hyphenated_word);
+
+            if (last_valid_hyph_index != -1) {
+              TRACE_LOG("Found valid hyph pos at %d / %c.\n",
+                  last_valid_hyph_index,
+                  wrapper->input_buffer[last_valid_hyph_index]);
+              hyph_index = last_valid_hyph_index;
+            }
+            else {
+              hyph_index = wrapper->last_word_end_index;
+            }
+          }
+          wrapper->input_buffer[end_index] = buf;
+        } // endif (wrapper->enable_hyphentation == true)
+        else {
+          // Check for dashes inside the last word.
+          // Example: "first-class car", where the word end we've now
+          // found is between "first-class" and "car".
+          wrap_width_position = wrapper->current_width_position;
+          hyph_index = wrapper->current_buffer_index - 2;
+          while ( (hyph_index >= 0)
+              && (hyph_index > wrapper->last_word_end_index)) {
+            printf("hyph_index: %ld / '%c'.\n",
+                hyph_index, wrapper->input_buffer[hyph_index]);
+
+            if ( (wrapper->input_buffer[hyph_index] == Z_UCS_MINUS)
+                && (wrap_width_position <= wrapper->line_length) ) {
+              // Found a dash to break on
+              break;
+            }
+            tt_get_glyph_size(wrapper->current_font,
+                wrapper->input_buffer[hyph_index],
+                &advance, &bitmap_width);
+            wrap_width_position -= bitmap_width;
+            hyph_index--;
+          }
+        }
+
+        TRACE_LOG("breaking on char %d / %c.\n",
+            hyph_index, wrapper->input_buffer[hyph_index]);
+
+        if (wrapper->input_buffer[hyph_index] == Z_UCS_MINUS) {
+          // We're wrappring on a in-word-dash.
+          flush_line(wrapper, hyph_index, false, true);
+        }
+        else if (wrapper->input_buffer[hyph_index] == Z_UCS_SPACE) {
+          flush_line(wrapper, hyph_index - 1, false, true);
+          // In case we're wrapping between words without hyphenation or
+          // in-word-dashes we'll have to get rid of the remaining leading
+          // space-char in the input buffer.
+          forget_first_char_in_buffer(wrapper);
+        }
+        else {
+          flush_line(wrapper, hyph_index - 2, true, true);
+        }
+
+        wrapper->current_advance_position
+          -= wrapper->last_word_end_advance_position;
+
+        wrapper->current_width_position
+          = wrapper->current_advance_position;
+
+        wrapper->last_word_end_advance_position
+          = wrapper->current_advance_position;
+
+        wrapper->last_word_end_width_position
+          = wrapper->current_width_position;
+
+        wrapper->last_word_end_index
+          = -1;
+      }
+      else if (wrapper->current_advance_position > wrapper->line_length * 2) {
+        // In case we haven't found a word end we'll only force a line
+        // break in case we've filled two full lines of text.
+        TRACE_LOG("break at %ld, 1\n", wrapper->current_buffer_index);
+        flush_line(wrapper, wrapper->current_buffer_index - 2, false, true);
+        wrapper->current_advance_position = 0;
+        wrapper->current_width_position = 0;
+      }
+      else {
+        // Otherwise, we'll do nothing and keep collecting chars until
+        // we later find a word and or exceed the double line length.
+      }
+    }
+    else if (current_char == Z_UCS_NEWLINE) {
       TRACE_LOG("Flushing on newline at current position.\n");
       // In case everything fits into the current line and the current
       // char is a newline, we can simply flush at the current position.
-      flush_line(wrapper, wrapper->current_buffer_index - 1, false);
+      flush_line(wrapper, wrapper->current_buffer_index - 1, false, false);
 
       wrapper->last_word_end_advance_position = 0;
       wrapper->last_word_end_width_position = 0;
@@ -368,75 +588,16 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
       wrapper->current_width_position = 0;
       wrapper->last_word_end_index = -1;
     }
-    else {
-      tt_get_glyph_size(wrapper->current_font, current_char,
-          &advance, &bitmap_width);
-      wrapper->current_width_position
-        = wrapper->current_advance_position + bitmap_width;
-      /*
-         printf("current_width_position: %ld for '%c'\n",
-         wrapper->current_width_position, current_char);
-         */
-      wrapper->current_advance_position += advance;
 
-      TRACE_LOG("check: %d/%d/%d\n",
-          wrapper->current_advance_position,
-          wrapper->line_length,
-          wrapper->last_word_end_index);
-
-      // end and are already over the line size.
-      if (wrapper->current_advance_position > wrapper->line_length) {
-        TRACE_LOG("Behind past line, match on space|newline, breaking.\n");
-        // In case we exceed the right margin, we have to break the line
-        // before the last word.
-
-        if (wrapper->last_word_end_index < 0) {
-          TRACE_LOG("break at %ld, 1\n", wrapper->current_buffer_index);
-          // If the current line does not contain a single word end, we'll
-          // have to break at the middle of the word.
-          flush_line(wrapper, wrapper->current_buffer_index - 2, true);
-          wrapper->current_advance_position = 0;
-          wrapper->current_width_position = 0;
-        }
-        else {
-          // Otherwise, we simply break after the last word.
-          TRACE_LOG("break at %ld, pixel: %d.\n",
-              wrapper->last_word_end_index + 1,
-              wrapper->current_advance_position);
-
-          flush_index = wrapper->last_word_end_index;
-
-          flush_line(wrapper, flush_index, true);
-
-          wrapper->current_advance_position
-            -= wrapper->last_word_end_advance_position;
-
-          wrapper->current_width_position
-            = wrapper->current_advance_position;
-
-          wrapper->last_word_end_advance_position
-            = wrapper->current_advance_position;
-
-          wrapper->last_word_end_width_position
-            = wrapper->current_width_position;
-
-          wrapper->last_word_end_index
-            = -1;
-        }
-
-        TRACE_LOG("after flush: width %d, linesize: %d\n",
-            wrapper->current_width_position, wrapper->line_length);
-      }
-      else if ( (current_char == Z_UCS_SPACE) && (last_char != Z_UCS_SPACE) ) {
-        TRACE_LOG("lweap-at-space: %ld\n",
-            wrapper->last_word_end_advance_position);
-        wrapper->last_word_end_advance_position
-          = wrapper->current_advance_position;
-        wrapper->last_word_end_width_position
-          = wrapper->current_width_position;
-        wrapper->last_word_end_index
-          = wrapper->current_buffer_index - 1;
-      }
+    if ( (current_char == Z_UCS_SPACE) && (last_char != Z_UCS_SPACE) ) {
+      TRACE_LOG("lweap-at-space: %ld\n",
+          wrapper->last_word_end_advance_position);
+      wrapper->last_word_end_advance_position
+        = wrapper->current_advance_position;
+      wrapper->last_word_end_width_position
+        = wrapper->current_width_position;
+      wrapper->last_word_end_index
+        = wrapper->current_buffer_index - 1;
     }
 
     input_index++;
@@ -448,7 +609,7 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
 void freetype_wordwrap_flush_output(true_type_wordwrapper* wrapper) {
   if ( (wrapper->current_buffer_index > 0)
       || (wrapper->metadata_index > 0) ) {
-    flush_line(wrapper, -1, false);
+    flush_line(wrapper, -1, false, false);
   }
 }
 

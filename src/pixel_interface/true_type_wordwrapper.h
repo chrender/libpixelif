@@ -61,6 +61,10 @@ typedef struct {
   long last_word_end_width_position;
   long current_advance_position;
   long current_width_position;
+  int space_bitmap_width;
+  int space_advance;
+  int dash_bitmap_width;
+  int dash_advance;
 } true_type_wordwrapper;
 
 
