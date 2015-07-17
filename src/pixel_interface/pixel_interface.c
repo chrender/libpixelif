@@ -636,6 +636,10 @@ static bool break_line(int window_number) {
   // undefined: the author suggests that it stay put).
   if ( (window_number == 1)
       || (z_windows[window_number]->scrolling_active == false) ) {
+    /*
+    printf("yspace_in_pixels:%d, line_height: %d.\n",
+        yspace_in_pixels, line_height);
+    */
     if (yspace_in_pixels >= line_height) {
       z_windows[window_number]->ycursorpos += line_height;
       reset_xcursorpos(window_number);
@@ -644,6 +648,7 @@ static bool break_line(int window_number) {
       // Not enough space for a new line and scrolling is disabled (via flag)
       // or not possible (in window 1).
       TRACE_LOG("Not breaking scrolling-inactive line, returning.\n");
+      printf("Not breaking scrolling-inactive line, returning.\n");
       return false;
     }
   }
@@ -1699,6 +1704,11 @@ static void link_interface_to_story(struct z_story *story) {
         fixed_bold_italic_font_filename, font_height_in_pixel, line_height);
   }
 
+  /*
+  printf("regular font at %p.\n", regular_font);
+  printf("bold font at %p.\n", bold_font);
+  */
+
   update_fixed_width_char_width();
 
   if (ver >= 5) {
@@ -1760,6 +1770,7 @@ static void link_interface_to_story(struct z_story *story) {
     if (i == 0) {
       z_windows[i]->ysize = screen_height_in_pixel;
       z_windows[i]->xsize = screen_width_without_scrollbar;
+      z_windows[i]->lower_padding = 4;
       z_windows[i]->scrolling_active = true;
       z_windows[i]->stream2copying_active = true;
       if (ver != 6) {
@@ -1774,6 +1785,7 @@ static void link_interface_to_story(struct z_story *story) {
       }
     }
     else {
+      z_windows[i]->lower_padding = 0;
       z_windows[i]->scrolling_active = false;
       z_windows[i]->stream2copying_active = false;
       z_windows[i]->leftmargin = 0;
@@ -1800,8 +1812,6 @@ static void link_interface_to_story(struct z_story *story) {
         z_windows[i]->xsize = 0;
       }
     }
-
-    z_windows[i]->lower_padding = 4;
 
     z_windows[i]->newline_routine = 0;
     z_windows[i]->interrupt_countdown = 0;
@@ -2086,6 +2096,8 @@ static void split_window(int16_t nof_lines) {
       }
     }
 
+    //printf("upper-y-size: %d.\n", z_windows[1]->ysize);
+
     last_split_window_size = nof_lines;
   }
 }
@@ -2110,6 +2122,30 @@ static void set_text_style(z_style text_style) {
 
   for (i=start_win_id; i<=end_win_id; i++) {
     TRACE_LOG("Evaluating style for window %d.\n", i);
+
+    // We'll always set the style for the wordwrapper, even it is currently
+    // not active, in case it is turned on again later.
+    if (text_style & Z_STYLE_NONRESET)
+      z_windows[i]->current_wrapper_style |= text_style;
+    else
+      z_windows[i]->current_wrapper_style = text_style;
+    TRACE_LOG("Resulting text style is %d.\n",
+        z_windows[i]->current_wrapper_style);
+
+    TRACE_LOG("Evaluating new font for wordwrapper.\n");
+    freetype_wordwrap_insert_metadata(
+        z_windows[i]->wordwrapper,
+        &wordwrap_output_style,
+        (void*)(&z_windows[i]->window_number),
+        (uint32_t)(text_style),
+        evaluate_font(
+          z_windows[i]->current_wrapper_style,
+          z_windows[i]->current_wrapper_font));
+    TRACE_LOG("Finished evaluating new font for wordwrapper.\n");
+
+    // In case wordwrapping is currently not active, we'll directly set
+    // the output parameters (which, during buffering, is otherwise done
+    // in time by the wordwrapper).
     if (bool_equal(z_windows[i]->buffering, false)) {
       if (text_style & Z_STYLE_NONRESET)
         z_windows[i]->output_text_style |= text_style;
@@ -2118,25 +2154,6 @@ static void set_text_style(z_style text_style) {
       TRACE_LOG("Resulting text style is %d.\n",
           z_windows[i]->output_text_style);
       update_window_true_type_font(i);
-    }
-    else {
-      if (text_style & Z_STYLE_NONRESET)
-        z_windows[i]->current_wrapper_style |= text_style;
-      else
-        z_windows[i]->current_wrapper_style = text_style;
-      TRACE_LOG("Resulting text style is %d.\n",
-          z_windows[i]->current_wrapper_style);
-
-      TRACE_LOG("Evaluating new font for wordwrapper.\n");
-      freetype_wordwrap_insert_metadata(
-          z_windows[i]->wordwrapper,
-          &wordwrap_output_style,
-          (void*)(&z_windows[i]->window_number),
-          (uint32_t)(text_style),
-          evaluate_font(
-            z_windows[i]->current_wrapper_style,
-            z_windows[i]->current_wrapper_font));
-      TRACE_LOG("Finished evaluating new font for wordwrapper.\n");
     }
   }
   TRACE_LOG("Done evaluating set_text_style in interface.\n");
@@ -2226,20 +2243,19 @@ static void set_font(z_font font) {
 
   for (i=start_win_id; i<=end_win_id; i++) {
     if (i != 1) {
+      z_windows[i]->current_wrapper_font = font;
+      freetype_wordwrap_insert_metadata(
+          z_windows[i]->wordwrapper,
+          &wordwrap_output_font,
+          (void*)(&z_windows[i]->window_number),
+          (uint32_t)font,
+          evaluate_font(
+            z_windows[i]->current_wrapper_style,
+            z_windows[i]->current_wrapper_font));
+
       if (bool_equal(z_windows[i]->buffering, false)) {
         z_windows[i]->output_font = font;
         update_window_true_type_font(i);
-      }
-      else {
-        z_windows[i]->current_wrapper_font = font;
-        freetype_wordwrap_insert_metadata(
-            z_windows[i]->wordwrapper,
-            &wordwrap_output_font,
-            (void*)(&z_windows[i]->window_number),
-            (uint32_t)font,
-            evaluate_font(
-              z_windows[i]->current_wrapper_style,
-              z_windows[i]->current_wrapper_font));
       }
     }
   }
@@ -2636,7 +2652,15 @@ static void refresh_upper_window() {
     */
 
     for (y=0; y<last_split_window_size; y++) {
+      if (y > 0) {
+        break_line(1);
+      }
       for (x=0; x<x_width; x++) {
+        /*
+        printf("x, y, fg, bg: %d, %d, %d, %d.\n", x, y, 
+            z_windows[1]->output_foreground_colour,
+            z_windows[1]->output_background_colour);
+        */
         current_char
           = upper_window_buffer->content + upper_window_buffer->width*y + x;
 
