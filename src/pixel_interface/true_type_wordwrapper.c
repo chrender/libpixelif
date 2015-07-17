@@ -45,8 +45,9 @@ static z_ucs newline_string[] = { Z_UCS_NEWLINE, 0 };
 static z_ucs minus_string[] = { Z_UCS_MINUS, 0 };
 
 static void set_font(true_type_wordwrapper *wrapper, true_type_font *new_font) {
+  TRACE_LOG("Wordwrapper setting new font to %p.\n", new_font);
   wrapper->current_font = new_font;
-  tt_get_glyph_size(wrapper->current_font, Z_UCS_MINUS,
+  tt_get_glyph_size(wrapper->current_font, Z_UCS_SPACE,
       &wrapper->space_bitmap_width, &wrapper->space_advance);
   tt_get_glyph_size(wrapper->current_font, Z_UCS_MINUS,
       &wrapper->dash_bitmap_width, &wrapper->dash_advance);
@@ -411,11 +412,13 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
     wrapper->current_advance_position += advance;
 
     /*
-       printf("check: %ld/%d/%ld\n",
-       wrapper->current_advance_position,
-       wrapper->line_length,
-       wrapper->last_word_end_index);
-       */
+    printf("check: '%c', font:%p, advpos, linelength, lwei: %ld/%d/%ld\n",
+        current_char,
+        wrapper->current_font,
+        wrapper->current_advance_position,
+        wrapper->line_length,
+        wrapper->last_word_end_index);
+    */
 
     if (wrapper->current_width_position >= wrapper->line_length) {
       /*
@@ -514,8 +517,10 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
           hyph_index = wrapper->current_buffer_index - 2;
           while ( (hyph_index >= 0)
               && (hyph_index > wrapper->last_word_end_index)) {
+            /*
             printf("hyph_index: %ld / '%c'.\n",
                 hyph_index, wrapper->input_buffer[hyph_index]);
+            */
 
             if ( (wrapper->input_buffer[hyph_index] == Z_UCS_MINUS)
                 && (wrap_width_position <= wrapper->line_length) ) {
@@ -619,6 +624,8 @@ void freetype_wordwrap_insert_metadata(true_type_wordwrapper *wrapper,
     void *ptr_parameter, uint32_t int_parameter, true_type_font *new_font) {
   size_t bytes_to_allocate;
   
+  TRACE_LOG("freetype_wordwrap_insert_metadata, font %p.\n", new_font);
+
   // Before adding new metadata, check if we need to allocate more space.
   if (wrapper->metadata_index == wrapper->metadata_size)
   {

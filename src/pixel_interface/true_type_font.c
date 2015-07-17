@@ -125,16 +125,25 @@ int tt_get_glyph_size(true_type_font *font, z_ucs char_code,
       &font->glyph_size_cache[char_code].is_valid);
 
   if (font->glyph_size_cache[char_code].is_valid == 1) {
-    TRACE_LOG("found glyph size cache hit for %c/%d.\n", char_code, char_code);
+    TRACE_LOG("found glyph size cache hit for font %p, %c/%d.\n",
+        font, char_code, char_code);
 
     TRACE_LOG("Reading from glyph cache at %p.\n",
         &font->glyph_size_cache[char_code].advance);
     *advance = font->glyph_size_cache[char_code].advance;
     *bitmap_width = font->glyph_size_cache[char_code].bitmap_width;
+    /*
+    printf("Fontcache for font %p, '%c' at %p: adv %d, bmitmapw: %d.\n",
+        font, char_code, advance, *advance, *bitmap_width);
+    */
 
     return 0;
   }
   else {
+    /*
+    printf("no glyph size cache hit for font %p, %c/%d.\n",
+        font, char_code, char_code);
+    */
     TRACE_LOG("no glyph size cache hit for %c/%d.\n", char_code, char_code);
     TRACE_LOG("font: %p.\n", font);
     result = get_glyph_size(font, char_code, advance, bitmap_width);
