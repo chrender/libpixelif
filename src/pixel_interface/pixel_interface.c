@@ -636,6 +636,10 @@ static bool break_line(int window_number) {
   // undefined: the author suggests that it stay put).
   if ( (window_number == 1)
       || (z_windows[window_number]->scrolling_active == false) ) {
+    /*
+    printf("yspace_in_pixels:%d, line_height: %d.\n",
+        yspace_in_pixels, line_height);
+    */
     if (yspace_in_pixels >= line_height) {
       z_windows[window_number]->ycursorpos += line_height;
       reset_xcursorpos(window_number);
@@ -644,6 +648,7 @@ static bool break_line(int window_number) {
       // Not enough space for a new line and scrolling is disabled (via flag)
       // or not possible (in window 1).
       TRACE_LOG("Not breaking scrolling-inactive line, returning.\n");
+      printf("Not breaking scrolling-inactive line, returning.\n");
       return false;
     }
   }
@@ -1760,6 +1765,7 @@ static void link_interface_to_story(struct z_story *story) {
     if (i == 0) {
       z_windows[i]->ysize = screen_height_in_pixel;
       z_windows[i]->xsize = screen_width_without_scrollbar;
+      z_windows[i]->lower_padding = 4;
       z_windows[i]->scrolling_active = true;
       z_windows[i]->stream2copying_active = true;
       if (ver != 6) {
@@ -1774,6 +1780,7 @@ static void link_interface_to_story(struct z_story *story) {
       }
     }
     else {
+      z_windows[i]->lower_padding = 0;
       z_windows[i]->scrolling_active = false;
       z_windows[i]->stream2copying_active = false;
       z_windows[i]->leftmargin = 0;
@@ -1800,8 +1807,6 @@ static void link_interface_to_story(struct z_story *story) {
         z_windows[i]->xsize = 0;
       }
     }
-
-    z_windows[i]->lower_padding = 4;
 
     z_windows[i]->newline_routine = 0;
     z_windows[i]->interrupt_countdown = 0;
@@ -2085,6 +2090,8 @@ static void split_window(int16_t nof_lines) {
             z_to_rgb_colour(z_windows[1]->output_background_colour));
       }
     }
+
+    //printf("upper-y-size: %d.\n", z_windows[1]->ysize);
 
     last_split_window_size = nof_lines;
   }
@@ -2636,7 +2643,15 @@ static void refresh_upper_window() {
     */
 
     for (y=0; y<last_split_window_size; y++) {
+      if (y > 0) {
+        break_line(1);
+      }
       for (x=0; x<x_width; x++) {
+        /*
+        printf("x, y, fg, bg: %d, %d, %d, %d.\n", x, y, 
+            z_windows[1]->output_foreground_colour,
+            z_windows[1]->output_background_colour);
+        */
         current_char
           = upper_window_buffer->content + upper_window_buffer->width*y + x;
 
