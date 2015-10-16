@@ -182,7 +182,7 @@ void forget_first_char_in_buffer(true_type_wordwrapper *wrapper) {
 
 void flush_line(true_type_wordwrapper *wrapper, long flush_index,
     bool append_minus, bool append_newline) {
-  z_ucs buf_1, buf_2;
+  z_ucs buf_1; //, buf_2;
   size_t chars_sent;
   int chars_to_move;
   int metadata_index = 0;
@@ -354,9 +354,10 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
   z_ucs *hyphenated_word, *input_index = input;
   z_ucs current_char, last_char, buf;
   int advance, bitmap_width;
-  long flush_index, wrap_width_position, end_index, hyph_index;
+  long wrap_width_position, end_index, hyph_index;
+  //long flush_index;
   long buf_index, last_valid_hyph_index;
-  bool breaking_on_dash;
+  //bool breaking_on_dash;
 
   // In order to build an algorithm most suitable to both enabled and
   // disabled hyphenation, we'll collect input until we'll find the first

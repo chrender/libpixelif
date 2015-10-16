@@ -191,6 +191,7 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
   int dr, dg, db; // delta from foreground to background
   uint8_t br, bg, bb; // pre-evaluated background colors
   int draw_width, bitmap_start_y, top_space, max_y;
+  int number_of_rows_available;
 
   FT_UInt glyph_index = FT_Get_Char_Index(font->face, charcode);
 
@@ -233,6 +234,10 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
 
   if (left_reverse_x + reverse_width > x_max) {
     reverse_width = x_max - left_reverse_x + 1;
+  }
+
+  if (reverse_width < 0) {
+    reverse_width = 0;
   }
 
   /*
@@ -282,7 +287,11 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
       top_space = 0;
     }
   }
-  if (y + top_space + (bitmap.rows - clip_top) < max_y) {
+  // compiler error? doesn't work without "number_of_rows_available" below:
+  //if (y + top_space + (bitmap.rows - clip_top) < max_y) {
+
+  number_of_rows_available = y + top_space + (bitmap.rows - clip_top);
+  if (number_of_rows_available < max_y) {
     max_y = y + top_space + (bitmap.rows - clip_top);
   }
   y += top_space;

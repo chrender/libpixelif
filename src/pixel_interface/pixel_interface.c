@@ -2657,7 +2657,7 @@ static void refresh_upper_window() {
       }
       for (x=0; x<x_width; x++) {
         /*
-        printf("x, y, fg, bg: %d, %d, %d, %d.\n", x, y, 
+        printf("x, y, fg, bg: %d, %d, %d, %d.\n", x, y,
             z_windows[1]->output_foreground_colour,
             z_windows[1]->output_background_colour);
         */
@@ -3015,16 +3015,16 @@ static void refresh_screen() {
 
 
 void handle_scrolling(int event_type) {
-  int lines_to_copy, saved_padding; //, line_shift,
+  int lines_to_copy; //, saved_padding; //, line_shift,
   int top_line_to_draw;
-  int paragraph_attr1, paragraph_attr2;
-  int nof_paragraphs;
+  //int paragraph_attr1, paragraph_attr2;
+  //int nof_paragraphs;
   int max_top_scroll_line;
   int previous_upscroll_position;
-  int history_screen_line_buf;
-  int return_code;
-  int extra_padding;
-  z_ucs input;
+  //int history_screen_line_buf;
+  //int return_code;
+  //int extra_padding;
+  //z_ucs input;
 
   TRACE_LOG("Starting handle_scrolling.\n");
 
