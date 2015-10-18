@@ -2893,7 +2893,7 @@ void finish_history_remeasurement() {
 
 
 static void refresh_screen() {
-  int last_active_z_window_id = -1;
+  int i, last_active_z_window_id = -1;
   int y_height_to_fill;
   int nof_paragraphs_to_repeat;
   int paragraph_attr1, paragraph_attr2;
@@ -2918,13 +2918,20 @@ static void refresh_screen() {
 
   y_height_to_fill
     = z_windows[0]->ysize
-    - nof_input_lines  * line_height
+    //- nof_input_lines  * line_height
     - z_windows[0]->lower_padding;
   /*
   printf("y_height_to_fill: %d, nof_input_lines: %d\n",
       y_height_to_fill, nof_input_lines);
   */
 
+  for (i=0; i<nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0); i++) {
+    z_windows[i]->text_style = Z_STYLE_ROMAN;
+    z_windows[i]->output_text_style = Z_STYLE_ROMAN;
+    z_windows[i]->font_type = Z_FONT_NORMAL;
+    z_windows[i]->output_font = Z_FONT_NORMAL;
+    z_windows[i]->output_true_type_font = regular_font;
+  }
 
   nof_paragraphs_to_repeat = 0;
   do {
