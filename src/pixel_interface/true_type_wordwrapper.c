@@ -551,7 +551,13 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
           forget_first_char_in_buffer(wrapper);
         }
         else {
-          flush_line(wrapper, hyph_index - 2, true, true);
+          if (wrapper->input_buffer[hyph_index - 2] == Z_UCS_MINUS) {
+            flush_line(wrapper, hyph_index - 3, true, true);
+            forget_first_char_in_buffer(wrapper);
+          }
+          else {
+            flush_line(wrapper, hyph_index - 2, true, true);
+          }
         }
 
         wrapper->current_advance_position
