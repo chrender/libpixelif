@@ -582,7 +582,8 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
         // we later find a word and or exceed the double line length.
       }
     }
-    else if (current_char == Z_UCS_NEWLINE) {
+
+    if (current_char == Z_UCS_NEWLINE) {
       TRACE_LOG("Flushing on newline at current position.\n");
       // In case everything fits into the current line and the current
       // char is a newline, we can simply flush at the current position.
