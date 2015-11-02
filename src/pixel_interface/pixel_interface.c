@@ -4137,20 +4137,23 @@ static struct z_screen_interface z_pixel_interface = {
 
 static void pixelif_paragraph_attribute_function(int *parameter1,
  int *parameter2) {
-  /*
-  printf("paragraph_attribute_function invoked, returning %d / %d.\n",
-      z_windows[active_z_window_id]->nof_lines_in_current_paragraph,
-      z_windows[0]->xsize);
-  */
-  TRACE_LOG("paragraph_attribute_function invoked, returning %d / %d.\n",
-      z_windows[active_z_window_id]->nof_lines_in_current_paragraph,
-      z_windows[0]->xsize);
-  //printf("add: %d\n",
-  //    z_windows[active_z_window_id]->nof_lines_in_current_paragraph);
-  *parameter1 = z_windows[active_z_window_id]->nof_lines_in_current_paragraph;
-  *parameter2 = z_windows[0]->xsize;
-  total_nof_lines_stored += *parameter1;
-  return;
+  TRACE_LOG("interface_open: %d.\n", interface_open);
+  if (interface_open == true) {
+    /*
+       printf("paragraph_attribute_function invoked, returning %d / %d.\n",
+       z_windows[active_z_window_id]->nof_lines_in_current_paragraph,
+       z_windows[0]->xsize);
+       */
+    TRACE_LOG("paragraph_attribute_function invoked, returning %d / %d.\n",
+        z_windows[active_z_window_id]->nof_lines_in_current_paragraph,
+        z_windows[0]->xsize);
+    //printf("add: %d\n",
+    //    z_windows[active_z_window_id]->nof_lines_in_current_paragraph);
+    *parameter1 = z_windows[active_z_window_id]->nof_lines_in_current_paragraph;
+    *parameter2 = z_windows[0]->xsize;
+    total_nof_lines_stored += *parameter1;
+    return;
+  }
 }
 
 
