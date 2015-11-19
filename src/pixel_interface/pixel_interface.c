@@ -2926,11 +2926,13 @@ static void refresh_screen() {
   */
 
   for (i=0; i<nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0); i++) {
-    z_windows[i]->text_style = Z_STYLE_ROMAN;
-    z_windows[i]->output_text_style = Z_STYLE_ROMAN;
-    z_windows[i]->font_type = Z_FONT_NORMAL;
-    z_windows[i]->output_font = Z_FONT_NORMAL;
-    z_windows[i]->output_true_type_font = regular_font;
+    if ( (ver == 6) || (i != 1) ) {
+      z_windows[i]->text_style = Z_STYLE_ROMAN;
+      z_windows[i]->output_text_style = Z_STYLE_ROMAN;
+      z_windows[i]->font_type = Z_FONT_NORMAL;
+      z_windows[i]->output_font = Z_FONT_NORMAL;
+      z_windows[i]->output_true_type_font = regular_font;
+    }
   }
 
   nof_paragraphs_to_repeat = 0;
