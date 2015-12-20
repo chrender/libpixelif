@@ -648,7 +648,7 @@ static bool break_line(int window_number) {
       // Not enough space for a new line and scrolling is disabled (via flag)
       // or not possible (in window 1).
       TRACE_LOG("Not breaking scrolling-inactive line, returning.\n");
-      printf("Not breaking scrolling-inactive line, returning.\n");
+      //printf("Not breaking scrolling-inactive line, returning.\n");
       return false;
     }
   }

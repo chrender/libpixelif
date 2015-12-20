@@ -80,6 +80,7 @@ true_type_wordwrapper *create_true_type_wordwrapper(true_type_font *font,
   result->metadata = NULL;
   result->metadata_size = 0;
   result->metadata_index = 0;
+  result->font_at_buffer_start = font;
   set_font(result, font);
 
   TRACE_LOG("Created new wordwrapper %p with line length %d.\n",
@@ -261,6 +262,10 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index,
           metadata_entry->ptr_parameter,
           metadata_entry->int_parameter);
 
+      if (metadata_entry->font != NULL) {
+        wrapper->font_at_buffer_start = metadata_entry->font;
+      }
+
       metadata_index++;
     }
   }
@@ -353,11 +358,11 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index,
 void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
   z_ucs *hyphenated_word, *input_index = input;
   z_ucs current_char, last_char, buf;
-  int advance, bitmap_width;
   long wrap_width_position, end_index, hyph_index;
-  //long flush_index;
-  long buf_index, last_valid_hyph_index;
-  //bool breaking_on_dash;
+  long buf_index, last_valid_hyph_index, output_metadata_index;
+  int hyph_font_dash_bitmap_width, hyph_font_dash_advance;
+  int metadata_index = 0, advance, bitmap_width;
+  true_type_font *hyph_font;
 
   // In order to build an algorithm most suitable to both enabled and
   // disabled hyphenation, we'll collect input until we'll find the first
@@ -407,9 +412,9 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
     wrapper->current_width_position
       = wrapper->current_advance_position + bitmap_width;
     /*
-       printf("current_width_position: %ld for '%c'\n",
-       wrapper->current_width_position, current_char);
-       */
+    printf("current_width_position: %ld for '%c'\n",
+        wrapper->current_width_position, current_char);
+    */
     wrapper->current_advance_position += advance;
 
     /*
@@ -472,12 +477,51 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
             buf_index = 0;
             last_valid_hyph_index = -1;
 
+            // We'll now have to find the correct font for the start
+            // of our hyphenated word. For that we'll remember the current
+            // font at buffer start and iterate though all the metadata
+            // until we're at the hyphenated word's beginning.
+            hyph_font = wrapper->font_at_buffer_start;
+            tt_get_glyph_size(hyph_font, Z_UCS_MINUS,
+                &hyph_font_dash_bitmap_width, &hyph_font_dash_advance);
+            metadata_index = 0;
+
             while ( (buf_index < z_ucs_len(hyphenated_word))
-                && (wrap_width_position + wrapper->dash_bitmap_width
+                && (wrap_width_position + hyph_font_dash_bitmap_width
                   <= wrapper->line_length) ) {
-              TRACE_LOG("Checking buf char %d / %c, hi:%d\n",
+              TRACE_LOG("Checking buf char %ld / %c, hi:%ld\n",
                   buf_index, hyphenated_word[buf_index],
                   hyph_index);
+
+              while (metadata_index < wrapper->metadata_index) {
+                /*
+                printf("metadata: %d of %d.\n",
+                    metadata_index, wrapper->metadata_index);
+                */
+
+                output_metadata_index =
+                  wrapper->metadata[metadata_index].output_index;
+
+                /*
+                printf("output_metadata_index: %ld, hyph_index: %ld\n",
+                    output_metadata_index, hyph_index);
+
+                printf("hyph_font: %p.\n",
+                    hyph_font);
+                */
+
+                if (output_metadata_index <= hyph_index) {
+                  if (wrapper->metadata[metadata_index].font != NULL) {
+                    hyph_font = wrapper->metadata[metadata_index].font;
+                    tt_get_glyph_size(hyph_font, Z_UCS_MINUS,
+                        &hyph_font_dash_bitmap_width, &hyph_font_dash_advance);
+                  }
+                  metadata_index++;
+                }
+                else {
+                  break;
+                }
+              }
 
               if (hyphenated_word[buf_index] == Z_UCS_SOFT_HYPEN) {
                 last_valid_hyph_index = hyph_index + 1;
@@ -487,13 +531,22 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
               }
 
               if (hyphenated_word[buf_index] != Z_UCS_SOFT_HYPEN) {
-                tt_get_glyph_size(wrapper->current_font,
+                //printf("hyph_font: %p.\n", hyph_font);
+                tt_get_glyph_size(hyph_font,
                     hyphenated_word[buf_index],
                     &advance, &bitmap_width);
-                wrap_width_position += bitmap_width;
+                //wrap_width_position += bitmap_width;
+                wrap_width_position += advance;
                 hyph_index++;
               }
               buf_index++;
+
+              /*
+              printf("(%ld + %d) = %ld <= %d\n",
+                  wrap_width_position, hyph_font_dash_bitmap_width,
+                  wrap_width_position + hyph_font_dash_bitmap_width,
+                  wrapper->line_length);
+              */
             }
 
             free(hyphenated_word);
@@ -667,6 +720,8 @@ void freetype_wordwrap_insert_metadata(true_type_wordwrapper *wrapper,
     = ptr_parameter;
   wrapper->metadata[wrapper->metadata_index].int_parameter
     = int_parameter;
+  wrapper->metadata[wrapper->metadata_index].font
+    = new_font;
 
   if (new_font != NULL) {
     set_font(wrapper, new_font);

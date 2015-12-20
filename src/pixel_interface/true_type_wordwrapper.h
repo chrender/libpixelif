@@ -40,6 +40,7 @@ struct freetype_wordwrap_metadata {
   long output_index;
   void (*metadata_output_function)(void *ptr_parameter, uint32_t int_parameter);
   void *ptr_parameter;
+  true_type_font *font;
   uint32_t int_parameter;
 };
 
@@ -51,6 +52,7 @@ typedef struct {
   struct freetype_wordwrap_metadata *metadata;
   int metadata_size;
   int metadata_index;
+  true_type_font *font_at_buffer_start;
   void (*wrapped_text_output_destination)(z_ucs *output, void *parameter);
   void *destination_parameter;
   z_ucs *input_buffer;
