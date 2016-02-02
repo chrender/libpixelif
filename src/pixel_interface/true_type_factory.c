@@ -31,8 +31,8 @@
 
 
 #include <ft2build.h>
-#include <ftlcdfil.h>
 #include FT_FREETYPE_H
+#include FT_LCD_FILTER_H
 
 #include "true_type_factory.h"
 #include "true_type_font.h"
