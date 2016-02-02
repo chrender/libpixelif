@@ -68,12 +68,17 @@ static int get_glyph_size(true_type_font *font, z_ucs char_code,
       glyph_index,
       FT_LOAD_DEFAULT);
 
-  slot = font->face->glyph;
+  if (ft_error != 0) {
+    return -1;
+  }
+  else {
+    slot = font->face->glyph;
 
-  *advance = slot->advance.x / 64;
-  *bitmap_width = slot->metrics.width / 64 + slot->metrics.horiBearingX / 64;
+    *advance = slot->advance.x / 64;
+    *bitmap_width = slot->metrics.width / 64 + slot->metrics.horiBearingX / 64;
 
-  return 0;
+    return 0;
+  }
 }
 
 
@@ -182,7 +187,8 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
   FT_GlyphSlot slot;
   FT_Bitmap bitmap;
   //FT_Vector kerning;
-  int ft_error, left_reverse_x, reverse_width;
+  //int ft_error,
+  int left_reverse_x, reverse_width;
   int screen_x, screen_y, advance, start_x, bitmap_x, bitmap_y;
   uint8_t pixel;
   uint8_t pixel2, pixel3;
@@ -195,12 +201,16 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
 
   FT_UInt glyph_index = FT_Get_Char_Index(font->face, charcode);
 
-  ft_error = FT_Load_Glyph(
+  // TODO: Evaluate ft_error
+  // ft_error = FT_Load_Glyph(
+  FT_Load_Glyph(
       font->face,
       glyph_index,
       FT_LOAD_DEFAULT);
 
-  ft_error = FT_Render_Glyph(
+  // TODO: Evaluate ft_error
+  // ft_error = FT_Render_Glyph(
+  FT_Render_Glyph(
       font->face->glyph,
       font->render_mode);
 
