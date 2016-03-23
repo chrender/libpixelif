@@ -59,6 +59,7 @@ void freetype_wordwrap_reset_position(true_type_wordwrapper *wrapper) {
   wrapper->last_word_end_advance_position = 0;
   wrapper->last_word_end_width_position = 0;
   wrapper->current_advance_position = 0;
+  wrapper->last_width_position = 0;
   wrapper->current_width_position = 0;
 }
 
@@ -418,15 +419,30 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
     wrapper->current_advance_position += advance;
 
     /*
-    printf("check: '%c', font:%p, advpos, linelength, lwei: %ld/%d/%ld\n",
+    printf("check:'%c',font:%p,advpos,ll,lweim,cwwp,bmw: %ld/%d/%ld/%ld/%d\n",
         current_char,
         wrapper->current_font,
         wrapper->current_advance_position,
         wrapper->line_length,
-        wrapper->last_word_end_index);
+        wrapper->last_word_end_index,
+        wrapper->current_width_position,
+        bitmap_width);
+
+    printf("bmw, lwp, ll: %d, %ld, %d.\n",
+        bitmap_width,
+        wrapper->last_width_position,
+        wrapper->line_length);
     */
 
-    if (wrapper->current_width_position >= wrapper->line_length) {
+    if ( (
+          (bitmap_width == 0)
+          && (wrapper->last_width_position >= wrapper->line_length)
+         )
+        || (wrapper->current_width_position >= wrapper->line_length) ) {
+
+      wrapper->last_width_position
+        = wrapper->current_width_position;
+
       /*
       printf("linebehind: %ld, %d.\n",
           wrapper->current_width_position, wrapper->line_length);
@@ -559,6 +575,7 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
             }
             else {
               hyph_index = wrapper->last_word_end_index;
+              //printf("no valid hyph, hyph_index: %ld.\n", hyph_index);
             }
           }
           wrapper->input_buffer[end_index] = buf;
@@ -589,7 +606,9 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
           }
         }
 
-        TRACE_LOG("breaking on char %d / %c.\n",
+        //printf("breaking on char %ld / %c.\n",
+        //    hyph_index, wrapper->input_buffer[hyph_index]);
+        TRACE_LOG("breaking on char %ld / %c.\n",
             hyph_index, wrapper->input_buffer[hyph_index]);
 
         if (wrapper->input_buffer[hyph_index] == Z_UCS_MINUS) {
@@ -616,6 +635,12 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
         wrapper->current_advance_position
           -= wrapper->last_word_end_advance_position;
 
+        /*
+        wrapper->last_width_position
+          = wrapper->current_width_position
+          - wrapper->last_word_end_advance_position;
+          */
+
         wrapper->current_width_position
           = wrapper->current_advance_position;
 
@@ -635,11 +660,16 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
         flush_line(wrapper, wrapper->current_buffer_index - 2, false, true);
         wrapper->current_advance_position = 0;
         wrapper->current_width_position = 0;
+        wrapper->last_width_position = 0;
       }
       else {
         // Otherwise, we'll do nothing and keep collecting chars until
         // we later find a word and or exceed the double line length.
       }
+    }
+    else {
+      wrapper->last_width_position
+        = wrapper->current_width_position;
     }
 
     if (current_char == Z_UCS_NEWLINE) {
@@ -652,6 +682,7 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
       wrapper->last_word_end_width_position = 0;
       wrapper->current_advance_position = 0;
       wrapper->current_width_position = 0;
+      wrapper->last_width_position = 0;
       wrapper->last_word_end_index = -1;
     }
 
