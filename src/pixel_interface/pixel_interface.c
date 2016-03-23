@@ -265,9 +265,6 @@ static void clear_to_eol(int window_number) {
   // Clear the remaining space on the line. This also ensures that the
   // background color for the line will be the current output_color.
 
-  //printf("finalize: %d.\n", z_windows[window_number]->xpos
-  //+ z_windows[window_number]->rightmost_filled_xpos - 1);
-
   width
     = z_windows[window_number]->xsize
     - z_windows[window_number]->rightmost_filled_xpos;
@@ -415,7 +412,7 @@ static int init_history_remeasurement() {
      = z_windows[0]->output_true_type_font;
      */
   z_windows[measurement_window_id]->nof_lines_in_current_paragraph
-    = 1;
+    = 0;
   z_windows[measurement_window_id]->ysize
     = z_windows[0]->ysize;
   z_windows[measurement_window_id]->xsize
@@ -513,7 +510,7 @@ static void remeasure_next_paragraph() {
     = z_windows[measurement_window_id]->nof_consecutive_lines_output
     - last_lines_in_history;
 
-  alter_last_paragraph_attributes(
+  alter_last_read_paragraph_attributes(
       measurement_history,
       lines_in_paragraph + 1,
       z_windows[0]->xsize);
@@ -671,15 +668,15 @@ static bool break_line(int window_number) {
         TRACE_LOG("nof_lines_to_scroll: %d.\n", nof_lines_to_scroll);
 
         /*
-           printf("copy-area: %d/%d to %d/%d, %d x %d\n",
-           z_windows[window_number]->ypos + yspace_in_pixels,
-           z_windows[window_number]->xpos,
-           z_windows[window_number]->ypos,
-           z_windows[window_number]->xpos,
-           z_windows[window_number]->xsize,
-           z_windows[window_number]->ysize - yspace_in_pixels
-           - z_windows[window_number]->lower_padding);
-           */
+        printf("copy-area: %d/%d to %d/%d, %d x %d\n",
+            z_windows[window_number]->ypos + yspace_in_pixels,
+            z_windows[window_number]->xpos,
+            z_windows[window_number]->ypos,
+            z_windows[window_number]->xpos,
+            z_windows[window_number]->xsize,
+            z_windows[window_number]->ysize - yspace_in_pixels
+            - z_windows[window_number]->lower_padding);
+        */
 
         TRACE_LOG("copy_area: from %d/%d size %d*%d to %d/%d.\n",
             z_windows[window_number]->xpos,
@@ -734,6 +731,11 @@ static bool break_line(int window_number) {
 
   nof_break_line_invocations++;
   z_windows[window_number]->nof_consecutive_lines_output++;
+  /*
+  printf("Increasing noflicp from %d to %d.\n",
+      z_windows[window_number]->nof_lines_in_current_paragraph,
+      z_windows[window_number]->nof_lines_in_current_paragraph + 1);
+  */
   z_windows[window_number]->nof_lines_in_current_paragraph++;
   if ( (input_line_on_screen == false)
          && (refresh_active == false)
@@ -1511,12 +1513,6 @@ static void z_ucs_output(z_ucs *z_ucs_output) {
       screen_pixel_interface->console_output(z_ucs_output);
     }
     else {
-      // Since the "flush-output-on-newline" config option ist set, we
-      // know that we can have only one Z_UCS_NEWLINE per invocation of
-      // this function, and that it will be the first output char.
-      if (*z_ucs_output == Z_UCS_NEWLINE) {
-        z_windows[active_z_window_id]->nof_lines_in_current_paragraph = 0;
-      }
       if (bool_equal(z_windows[active_z_window_id]->buffering, false)) {
         z_ucs_output_window_target(
             z_ucs_output,
@@ -1765,7 +1761,7 @@ static void link_interface_to_story(struct z_story *story) {
     z_windows[i]->output_font = Z_FONT_NORMAL;
     z_windows[i]->output_true_type_font = regular_font;
     z_windows[i]->nof_consecutive_lines_output = 0;
-    z_windows[i]->nof_lines_in_current_paragraph = 1;
+    z_windows[i]->nof_lines_in_current_paragraph = 0;
 
     if (i == 0) {
       z_windows[i]->ysize = screen_height_in_pixel;
@@ -1852,12 +1848,12 @@ static void link_interface_to_story(struct z_story *story) {
       z_windows[i]->current_wrapper_font = z_windows[i]->font_type;
     }
 
+    z_windows[i]->ycursorpos
+      = (ver >= 5 ? 0 : (z_windows[i]->ysize - line_height - 4));
+
     reset_xcursorpos(i);
 
     erase_window(i);
-
-    z_windows[i]->ycursorpos
-      = (ver >= 5 ? 0 : (z_windows[i]->ysize - line_height - 4));
   }
 
   z_windows[measurement_window_id]
@@ -2431,10 +2427,8 @@ static void refresh_input_line(bool display_cursor) {
     switch_to_window(0);
   }
 
-  /*
-  printf("refresh: curx:%d, cury:%d\n",
-      *current_input_x, *current_input_y);
-  */
+  //printf("refresh: curx:%d, cury:%d\n",
+  //    *current_input_x, *current_input_y);
   TRACE_LOG("refresh: curx:%d, cury:%d\n",
       *current_input_x, *current_input_y);
   z_windows[0]->xcursorpos = *current_input_x - z_windows[0]->xpos
@@ -2462,10 +2456,8 @@ static void refresh_input_line(bool display_cursor) {
     TRACE_LOG("current_input_y: %d, nof_input_lines:%d\n",
         *current_input_y, nof_input_lines);
   }
-  /*
-  printf("current_input_y: %d, nof_input_lines:%d\n",
-      *current_input_y, nof_input_lines);
-  */
+  //printf("current_input_y: %d, nof_input_lines:%d\n",
+  //    *current_input_y, nof_input_lines);
 
   if (display_cursor == true) {
     draw_cursor();
@@ -2645,21 +2637,17 @@ static void refresh_upper_window() {
     z_windows[1]->output_foreground_colour = current_foreground;
     z_windows[1]->output_background_colour = current_background;
     update_window_true_type_font(1);
-    /*
-    printf("bb: style:%d, f:%d, b:%d\n",
-        current_style, current_foreground, current_background);
-    */
+    //printf("bb: style:%d, f:%d, b:%d\n",
+    //    current_style, current_foreground, current_background);
 
     for (y=0; y<last_split_window_size; y++) {
       if (y > 0) {
         break_line(1);
       }
       for (x=0; x<x_width; x++) {
-        /*
-        printf("x, y, fg, bg: %d, %d, %d, %d.\n", x, y,
-            z_windows[1]->output_foreground_colour,
-            z_windows[1]->output_background_colour);
-        */
+        //printf("x, y, fg, bg: %d, %d, %d, %d.\n", x, y,
+        //    z_windows[1]->output_foreground_colour,
+        //    z_windows[1]->output_background_colour);
         current_char
           = upper_window_buffer->content + upper_window_buffer->width*y + x;
 
@@ -2733,6 +2721,7 @@ static void end_screen_redraw() {
   redraw_pixel_lines_to_skip = 0;
   redraw_pixel_lines_to_draw = -1;
   screen_pixel_interface->set_cursor_visibility(true);
+  z_windows[0]->nof_lines_in_current_paragraph = 0;
 }
 
 
@@ -2741,12 +2730,10 @@ static void redraw_screen_area(int top_line_to_redraw) {
   int paragraph_attr1, paragraph_attr2;
   int return_code;
 
-  /*
-  printf("Redrawing screen from line %d to %d.\n",
-      top_line_to_redraw,
-      top_line_to_redraw + redraw_pixel_lines_to_draw);
-  printf("top_upscroll_line: %d.\n", top_upscroll_line);
-  */
+  //printf("Redrawing screen from line %d to %d.\n",
+  //    top_line_to_redraw,
+  //    top_line_to_redraw + redraw_pixel_lines_to_draw);
+  //printf("top_upscroll_line: %d.\n", top_upscroll_line);
 
   TRACE_LOG("Redrawing screen from line %d to %d.\n",
       top_line_to_redraw,
@@ -2762,11 +2749,9 @@ static void redraw_screen_area(int top_line_to_redraw) {
       > (nof_input_lines - 1 + history_screen_line) * line_height
       + z_windows[0]->lower_padding) {
 
-    /*
-    printf("(nil - 1 + hsl) * line_height + low_padding = %d.\n",
-        (nof_input_lines - 1 + history_screen_line) * line_height
-        + z_windows[0]->lower_padding);
-    */
+    //printf("(nil - 1 + hsl) * line_height + low_padding = %d.\n",
+    //    (nof_input_lines - 1 + history_screen_line) * line_height
+    //    + z_windows[0]->lower_padding);
 
     paragraph_attr1 = 0;
     // In case we're repeating the very last paragraph this likely
@@ -2774,12 +2759,10 @@ static void redraw_screen_area(int top_line_to_redraw) {
     // it hasn't been finished yet). In order to detect this we'll
     // set paragraph_attr1 to 0 and compare later.
 
-    /*
-    printf("nof_input_lines: %d.\n", nof_input_lines);
-    printf("history_screen_line: %d.\n", history_screen_line);
-    printf("pre-rewind: paragraph_attr1:%d, paragraph_attr2: %d.\n",
-          paragraph_attr1, paragraph_attr2);
-    */
+    //printf("nof_input_lines: %d.\n", nof_input_lines);
+    //printf("history_screen_line: %d.\n", history_screen_line);
+    //printf("pre-rewind: paragraph_attr1:%d, paragraph_attr2: %d.\n",
+    //      paragraph_attr1, paragraph_attr2);
 
     TRACE_LOG("history_screen_line: %d.\n", history_screen_line);
     TRACE_LOG("pre-rewind: paragraph_attr1:%d, paragraph_attr2: %d.\n",
@@ -2793,11 +2776,9 @@ static void redraw_screen_area(int top_line_to_redraw) {
     // Adapt line number that history is currently pointing to.
 
     if (return_code == 0) {
-      /*
-      printf("rewind: paragraph_attr1:%d, paragraph_attr2: %d.\n",
-          paragraph_attr1, paragraph_attr2);
-      printf("history_screen_line: %d.\n", history_screen_line);
-      */
+      //printf("rewind: paragraph_attr1:%d, paragraph_attr2: %d.\n",
+      //    paragraph_attr1, paragraph_attr2);
+      //printf("history_screen_line: %d.\n", history_screen_line);
       TRACE_LOG("rewind: paragraph_attr1:%d, paragraph_attr2: %d.\n",
           paragraph_attr1, paragraph_attr2);
       TRACE_LOG("history_screen_line: %d.\n", history_screen_line);
@@ -2807,10 +2788,8 @@ static void redraw_screen_area(int top_line_to_redraw) {
       //printf("rewind, history_screen_line: %d.\n", history_screen_line);
     }
     else if (return_code == 1) {
-      /*
-      printf("Hit buffer back while rewinding / %d.\n",
-          history_screen_line);
-      */
+      //printf("Hit buffer back while rewinding / %d.\n",
+      //    history_screen_line);
       TRACE_LOG("Hit buffer back while rewinding / %d.\n",
           history_screen_line);
       history_screen_line
@@ -2818,18 +2797,14 @@ static void redraw_screen_area(int top_line_to_redraw) {
       break;
     }
 
-    /*
-    printf("tusl: %d, h*l*lp:%d\n", top_upscroll_line + 1,
-        (nof_input_lines - 1 + history_screen_line) * line_height
-        + z_windows[0]->lower_padding);
-    */
+    //printf("tusl: %d, h*l*lp:%d\n", top_upscroll_line + 1,
+    //    (nof_input_lines - 1 + history_screen_line) * line_height
+    //    + z_windows[0]->lower_padding);
   }
 
-  /*
-  printf("(nil - 1 + hsl) * line_height + low_padding = %d.\n",
-      (nof_input_lines - 1 + history_screen_line) * line_height
-      + z_windows[0]->lower_padding);
-  */
+  //printf("\n---\n(nil - 1 + hsl) * line_height + low_padding = %d.\n",
+  //    (nof_input_lines - 1 + history_screen_line) * line_height
+  //    + z_windows[0]->lower_padding);
 
   TRACE_LOG("top_line_to_redraw: %d.\n", top_line_to_redraw);
 
@@ -2853,6 +2828,7 @@ static void redraw_screen_area(int top_line_to_redraw) {
   reset_xcursorpos(0);
 
   while (redraw_pixel_lines_to_draw > 0) {
+    //printf("redraw_pixel_lines_to_skip: %d.\n", redraw_pixel_lines_to_skip);
     //printf("redraw_pixel_lines_to_draw: %d.\n", redraw_pixel_lines_to_draw);
     z_windows[0]->nof_consecutive_lines_output = 0;
     //printf("ypos at %d.\n", z_windows[0]->ycursorpos);
@@ -2863,11 +2839,9 @@ static void redraw_screen_area(int top_line_to_redraw) {
     history_screen_line -= z_windows[0]->nof_consecutive_lines_output;
     //printf("redraw, history_screen_line: %d.\n", history_screen_line);
 
-    /*
-    printf("total_nof_lines_stored: %ld\n", total_nof_lines_stored);
-    printf("history_screen_line: %d.\n", history_screen_line);
-    printf("redraw_pixel_lines_to_draw: %d.\n", redraw_pixel_lines_to_draw);
-    */
+    //printf("total_nof_lines_stored: %ld\n", total_nof_lines_stored);
+    //printf("history_screen_line: %d.\n", history_screen_line);
+    //printf("redraw_pixel_lines_to_draw: %d.\n", redraw_pixel_lines_to_draw);
     //screen_pixel_interface->update_screen();
     //event_type = get_next_event_wrapper(&input, 0);
   }
@@ -2919,10 +2893,8 @@ static void refresh_screen() {
     = z_windows[0]->ysize
     //- nof_input_lines  * line_height
     - z_windows[0]->lower_padding;
-  /*
-  printf("y_height_to_fill: %d, nof_input_lines: %d\n",
-      y_height_to_fill, nof_input_lines);
-  */
+  //printf("y_height_to_fill: %d, nof_input_lines: %d\n",
+  //    y_height_to_fill, nof_input_lines);
 
   for (i=0; i<nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0); i++) {
     if ( (ver == 6) || (i != 1) ) {
@@ -2937,6 +2909,7 @@ static void refresh_screen() {
   nof_paragraphs_to_repeat = 0;
   do {
     paragraph_attr1 = 0;
+    paragraph_attr2 = 0;
     // In case we're repeating the very last paragraph this likely
     // won't have its height stored in the history (simply because
     // it hasn't been finished yet). In order to detect this we'll
@@ -2964,10 +2937,8 @@ static void refresh_screen() {
       // buffer back encountered
       break;
     }
-    /*
-    printf("history_screen_line * line_height: %d, y_height_to_fill:%d.\n",
-        history_screen_line * line_height, y_height_to_fill);
-    */
+    //printf("history_screen_line * line_height: %d, y_height_to_fill:%d.\n",
+    //    history_screen_line * line_height, y_height_to_fill);
   }
   // Scroll up until we're above the lowest line to refresh.
   while (history_screen_line * line_height <= y_height_to_fill);
@@ -3042,7 +3013,7 @@ void handle_scrolling(int event_type) {
     return;
   }
 
-  //printf("total_lines_in_history: %d.\n", total_lines_in_history);
+  //printf("total_lines_in_history: %ld.\n", total_lines_in_history);
   max_top_scroll_line
     = (nof_input_lines - 1 + total_lines_in_history) * line_height
     + z_windows[0]->lower_padding - 1;
@@ -3183,6 +3154,7 @@ void handle_scrolling(int event_type) {
   z_windows[0]->nof_consecutive_lines_output = 0;
 
   TRACE_LOG("End of handle_scrolling.\n");
+  //printf("End of handle_scrolling.\n");
 }
 
 
@@ -3344,7 +3316,6 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
         //printf("err\n");
       }
       output_repeat_paragraphs(preload_history, 1, false, false);
-      //printf("wrapper-xpos: %ld\n", preloaded_wordwrapper->current_pixel_pos);
       input_x = get_current_pixel_position(preloaded_wordwrapper)
         + z_windows[active_z_window_id]->xpos
         + z_windows[active_z_window_id]->leftmargin;
@@ -3439,6 +3410,8 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
     else if ( (event_type == EVENT_WAS_CODE_PAGE_UP)
         || (event_type == EVENT_WAS_CODE_PAGE_DOWN)) {
       handle_scrolling(event_type);
+      //printf("XXX : nlicp: %d\n",
+      //    z_windows[0]->nof_lines_in_current_paragraph);
     }
     else {
       if (top_upscroll_line != -1) {
@@ -3851,12 +3824,7 @@ static int read_char(uint16_t tenth_seconds, uint32_t verification_routine,
     else {
       if (top_upscroll_line != -1) {
         // End up-scroll.
-        TRACE_LOG("Ending scrollback.\n");
-        top_upscroll_line = -1;
-        upscroll_hit_top = false;
-        destroy_history_output(history);
-        history = NULL;
-        screen_pixel_interface->set_cursor_visibility(true);
+        end_screen_redraw();
         refresh_screen();
       }
 
@@ -4140,11 +4108,9 @@ static void pixelif_paragraph_attribute_function(int *parameter1,
  int *parameter2) {
   TRACE_LOG("interface_open: %d.\n", interface_open);
   if (interface_open == true) {
-    /*
-       printf("paragraph_attribute_function invoked, returning %d / %d.\n",
-       z_windows[active_z_window_id]->nof_lines_in_current_paragraph,
-       z_windows[0]->xsize);
-       */
+    //printf("paragraph_attribute_function invoked, returning %d / %d.\n",
+    //    z_windows[active_z_window_id]->nof_lines_in_current_paragraph,
+    //    z_windows[0]->xsize);
     TRACE_LOG("paragraph_attribute_function invoked, returning %d / %d.\n",
         z_windows[active_z_window_id]->nof_lines_in_current_paragraph,
         z_windows[0]->xsize);
@@ -4153,6 +4119,10 @@ static void pixelif_paragraph_attribute_function(int *parameter1,
     *parameter1 = z_windows[active_z_window_id]->nof_lines_in_current_paragraph;
     *parameter2 = z_windows[0]->xsize;
     total_nof_lines_stored += *parameter1;
+
+    //printf("Resetting nof_lines_in_current_paragraph.\n");
+    z_windows[active_z_window_id]->nof_lines_in_current_paragraph = 0;
+
     return;
   }
 }
