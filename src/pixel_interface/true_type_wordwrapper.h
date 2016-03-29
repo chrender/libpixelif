@@ -64,6 +64,10 @@ typedef struct {
   long current_advance_position;
   long last_width_position;
   long current_width_position;
+  long last_char_in_line;
+  long last_char_in_line_advance_position;
+  long last_char_in_line_last_width_position;
+  long last_char_in_line_current_width_position;
   int space_bitmap_width;
   int space_advance;
   int dash_bitmap_width;

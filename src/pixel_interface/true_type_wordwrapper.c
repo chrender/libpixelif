@@ -440,6 +440,16 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
          )
         || (wrapper->current_width_position >= wrapper->line_length) ) {
 
+      if (wrapper->last_char_in_line == 0) {
+        wrapper->last_char_in_line = wrapper->current_buffer_index - 2;
+        wrapper->last_char_in_line_advance_position
+          = wrapper->current_width_position;
+        wrapper->last_char_in_line_last_width_position
+          = wrapper->last_width_position;
+        wrapper->last_char_in_line_current_width_position
+          = wrapper->current_width_position;
+      }
+
       wrapper->last_width_position
         = wrapper->current_width_position;
 
@@ -650,17 +660,25 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
         wrapper->last_word_end_width_position
           = wrapper->current_width_position;
 
-        wrapper->last_word_end_index
-          = -1;
+        wrapper->last_word_end_index = -1;
+        wrapper->last_char_in_line = 0;
       }
       else if (wrapper->current_advance_position > wrapper->line_length * 2) {
         // In case we haven't found a word end we'll only force a line
         // break in case we've filled two full lines of text.
-        TRACE_LOG("break at %ld, 1\n", wrapper->current_buffer_index);
-        flush_line(wrapper, wrapper->current_buffer_index - 2, false, true);
-        wrapper->current_advance_position = 0;
-        wrapper->current_width_position = 0;
-        wrapper->last_width_position = 0;
+        TRACE_LOG("break at %ld, 1\n", wrapper->last_char_in_line);
+        flush_line(wrapper, wrapper->last_char_in_line, false, true);
+
+        wrapper->current_advance_position
+          = wrapper->last_char_in_line_advance_position;
+
+        wrapper->last_width_position
+          = wrapper->last_char_in_line_last_width_position;
+
+        wrapper->current_width_position
+          = wrapper->last_char_in_line_current_width_position;
+
+        wrapper->last_char_in_line = wrapper->current_buffer_index - 2;
       }
       else {
         // Otherwise, we'll do nothing and keep collecting chars until
@@ -684,6 +702,7 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
       wrapper->current_width_position = 0;
       wrapper->last_width_position = 0;
       wrapper->last_word_end_index = -1;
+      wrapper->last_char_in_line = 0;
     }
 
     if ( (current_char == Z_UCS_SPACE) && (last_char != Z_UCS_SPACE) ) {
