@@ -413,10 +413,11 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
         &advance, &bitmap_width);
     wrapper->current_width_position
       = wrapper->current_advance_position + bitmap_width;
-    printf("current_width_position: %ld for '%c'\n",
-        wrapper->current_width_position, current_char);
+    //printf("current_width_position: %ld for '%c'\n",
+    //    wrapper->current_width_position, current_char);
     wrapper->current_advance_position += advance;
 
+    /*
     printf("check:'%c',font:%p,advpos,ll,lweim,cwwp,bmw: %ld/%d/%ld/%ld/%d\n",
         current_char,
         wrapper->current_font,
@@ -430,6 +431,7 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
         bitmap_width,
         wrapper->last_width_position,
         wrapper->line_length);
+    */
 
     if ( (
           (bitmap_width == 0)
@@ -504,25 +506,25 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
             while ( (buf_index < z_ucs_len(hyphenated_word))
                 && (wrap_width_position + hyph_font_dash_bitmap_width
                   <= wrapper->line_length) ) {
+              /*
               printf("Checking buf char %ld / %c, hi:%ld\n",
                   buf_index, hyphenated_word[buf_index],
                   hyph_index);
+              */
               TRACE_LOG("Checking buf char %ld / %c, hi:%ld\n",
                   buf_index, hyphenated_word[buf_index],
                   hyph_index);
 
               while (metadata_index < wrapper->metadata_index) {
-                printf("metadata: %d of %d.\n",
-                    metadata_index, wrapper->metadata_index);
+                //printf("metadata: %d of %d.\n",
+                //    metadata_index, wrapper->metadata_index);
 
                 output_metadata_index =
                   wrapper->metadata[metadata_index].output_index;
 
-                printf("output_metadata_index: %ld, hyph_index: %ld\n",
-                    output_metadata_index, hyph_index);
-
-                printf("hyph_font: %p.\n",
-                    hyph_font);
+                //printf("output_metadata_index: %ld, hyph_index: %ld\n",
+                //    output_metadata_index, hyph_index);
+                //printf("hyph_font: %p.\n", hyph_font);
 
                 if (output_metadata_index <= hyph_index) {
                   if (wrapper->metadata[metadata_index].font != NULL) {
@@ -545,7 +547,7 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
               }
 
               if (hyphenated_word[buf_index] != Z_UCS_SOFT_HYPEN) {
-                printf("hyph_font: %p.\n", hyph_font);
+                //printf("hyph_font: %p.\n", hyph_font);
                 tt_get_glyph_size(hyph_font,
                     hyphenated_word[buf_index],
                     &advance, &bitmap_width);
@@ -561,18 +563,22 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
 
               buf_index++;
 
+              /*
               printf("(%ld + %d) = %ld <= %d\n",
                   wrap_width_position, hyph_font_dash_bitmap_width,
                   wrap_width_position + hyph_font_dash_bitmap_width,
                   wrapper->line_length);
+              */
             }
 
             free(hyphenated_word);
 
             if (last_valid_hyph_index != -1) {
+              /*
               printf("Found valid hyph pos at %ld / %c.\n",
                   last_valid_hyph_index,
                   wrapper->input_buffer[last_valid_hyph_index]);
+              */
               TRACE_LOG("Found valid hyph pos at %ld / %c.\n",
                   last_valid_hyph_index,
                   wrapper->input_buffer[last_valid_hyph_index]);
@@ -582,7 +588,7 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
             else {
               hyph_index = wrapper->last_word_end_index;
               hyph_position = wrapper->last_word_end_advance_position;
-              printf("no valid hyph, hyph_index: %ld.\n", hyph_index);
+              //printf("no valid hyph, hyph_index: %ld.\n", hyph_index);
             }
           }
           wrapper->input_buffer[end_index] = buf;
@@ -614,8 +620,8 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
           hyph_position = wrap_width_position;
         }
 
-        printf("breaking on char %ld / %c.\n",
-            hyph_index, wrapper->input_buffer[hyph_index]);
+        //printf("breaking on char %ld / %c.\n",
+        //    hyph_index, wrapper->input_buffer[hyph_index]);
         TRACE_LOG("breaking on char %ld / %c.\n",
             hyph_index, wrapper->input_buffer[hyph_index]);
 
@@ -664,8 +670,10 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
         // In case we haven't found a word end we'll only force a line
         // break in case we've filled two full lines of text.
 
+        /*
         printf("flush on: %c\n", wrapper->input_buffer[
             wrapper->current_buffer_index - 2]);
+        */
         flush_line(wrapper, wrapper->current_buffer_index - 2, false, true);
 
         wrapper->current_advance_position
@@ -678,7 +686,7 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
         wrapper->last_word_end_advance_position = 0;
         wrapper->last_word_end_width_position = 0;
 
-        printf("first buf: %c\n", wrapper->input_buffer[0]);
+        //printf("first buf: %c\n", wrapper->input_buffer[0]);
 
         /*
         printf("current_buffer_index: %ld\n", wrapper->current_buffer_index);
