@@ -169,6 +169,7 @@ static int line_height;
 static int fixed_width_char_width = 8;
 static true_type_wordwrapper *preloaded_wordwrapper;
 static int scrollbar_width = 12;
+static z_rgb_colour pixel_cursor_colour = Z_COLOUR_BLUE;
 
 // Scrolling upwards:
 // It is always assumed that there's no output to window[0] and it's
@@ -194,6 +195,7 @@ static int history_screen_line; //, last_history_screen_line;
 // used by screen refresh functions like "new_pixel_screen_size".
 static bool input_line_on_screen = false;
 static int nof_input_lines = 0;
+static int input_index = 0;
 static z_ucs *current_input_buffer = NULL;
 static z_ucs newline_string[] = { '\n', 0 };
 
@@ -237,8 +239,8 @@ static char *config_option_names[] = {
   "left-margin", "right-margin", "disable-hyphenation", "disable-color",
   "regular-font", "italic-font", "bold-font", "bold-italic-font",
   "fixed-regular-font", "fixed-italic-font", "fixed-bold-font",
-  "fixed-bold-italic-font",
-  "font-search-path", "font-size", NULL };
+  "fixed-bold-italic-font", "font-search-path", "font-size",
+  "cursor-color", NULL };
 
 
 static int process_glyph_string(z_ucs *z_ucs_output, int window_number,
@@ -1317,6 +1319,7 @@ static uint8_t get_total_width_in_pixels_of_text_sent_to_output_stream_3() {
 static int parse_config_parameter(char *key, char *value) {
   long long_value;
   char *endptr;
+  short color_code;
 
   TRACE_LOG("pixel-if parsing config param key \"%s\", value \"%s\".\n",
       key, value != NULL ? value : "(null)");
@@ -1429,6 +1432,16 @@ static int parse_config_parameter(char *key, char *value) {
     font_height_in_pixel = long_value;
     return 0;
   }
+  else if (strcasecmp(key, "cursor-color") == 0) {
+    if (value == NULL)
+      return -1;
+    color_code = color_name_to_z_colour(value);
+    free(value);
+    if (color_code == -1)
+      return -1;
+    pixel_cursor_colour = color_code;
+    return 0;
+  }
   else {
     return screen_pixel_interface->parse_config_parameter(key, value);
   }
@@ -1493,6 +1506,9 @@ static char *get_config_value(char *key)
     snprintf(last_font_size_config_value_as_string, MAX_VALUE_AS_STRING_LEN,
         "%d", font_height_in_pixel);
     return last_font_size_config_value_as_string;
+  }
+  else if (strcasecmp(key, "cursor-color") == 0) {
+    return z_colour_names[pixel_cursor_colour];
   }
   else {
     return screen_pixel_interface->get_config_value(key);
@@ -2392,14 +2408,13 @@ static history_output_target preload_history_target =
 };
 
 
-static void draw_cursor() {
+static void draw_cursor(int cursor_x, int cursor_y) {
   screen_pixel_interface->fill_area(
-      z_windows[0]->xpos + z_windows[0]->leftmargin
-      + z_windows[0]->xcursorpos,
-      z_windows[0]->ypos + z_windows[0]->ycursorpos,
-      1,
+      cursor_x,
+      cursor_y,
+      1 * screen_pixel_interface->get_device_to_pixel_ratio(),
       line_height - 2,
-      z_to_rgb_colour(Z_COLOUR_BLUE));
+      z_to_rgb_colour(pixel_cursor_colour));
 }
 
 
@@ -2428,8 +2443,12 @@ static void clear_input_line() {
 
 
 static void refresh_input_line(bool display_cursor) {
-  int nof_line_breaks, nof_new_input_lines;
+  int nof_line_breaks, nof_new_input_lines, output_index;
   int last_active_z_window_id = -1;
+  bool my_no_more_space;
+  int cursor_x, cursor_y;
+  z_ucs *input_buffer_index;
+
   if (input_line_on_screen == false) {
     return;
   }
@@ -2459,8 +2478,47 @@ static void refresh_input_line(bool display_cursor) {
 
   clear_input_line();
 
-  nof_line_breaks
-    = process_glyph_string(current_input_buffer, 0, bold_font, NULL);
+  nof_line_breaks = 0;
+
+  if (*current_input_buffer) {
+    input_buffer_index = current_input_buffer;
+    output_index = 0;
+    my_no_more_space = false;
+
+    while ((*input_buffer_index) && (my_no_more_space == false)) {
+
+      if (output_index == input_index) {
+        cursor_x = z_windows[0]->xpos + z_windows[0]->leftmargin
+          + z_windows[0]->xcursorpos;
+        cursor_y = z_windows[0]->ypos + z_windows[0]->ycursorpos;
+      }
+
+      nof_line_breaks += process_glyph(
+          *input_buffer_index,
+          0,
+          bold_font,
+          &my_no_more_space);
+
+      output_index++;
+      input_buffer_index++;
+    }
+
+    if (output_index == input_index) {
+      cursor_x = z_windows[0]->xpos + z_windows[0]->leftmargin
+        + z_windows[0]->xcursorpos;
+      cursor_y = z_windows[0]->ypos + z_windows[0]->ycursorpos;
+    }
+  }
+  else {
+    cursor_x = z_windows[0]->xpos + z_windows[0]->leftmargin
+      + z_windows[0]->xcursorpos;
+    cursor_y = z_windows[0]->ypos + z_windows[0]->ycursorpos;
+  }
+
+  if (display_cursor == true) {
+    draw_cursor(cursor_x, cursor_y);
+  }
+
   TRACE_LOG("nof_line_breaks: %d\n", nof_line_breaks);
   TRACE_LOG("current_input_y: %d\n", *current_input_y);
   nof_new_input_lines = nof_line_breaks - (nof_input_lines - 1);
@@ -2472,10 +2530,6 @@ static void refresh_input_line(bool display_cursor) {
   }
   //printf("current_input_y: %d, nof_input_lines:%d\n",
   //    *current_input_y, nof_input_lines);
-
-  if (display_cursor == true) {
-    draw_cursor();
-  }
 
   if (last_active_z_window_id != -1) {
     switch_to_window(last_active_z_window_id);
@@ -3226,7 +3280,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
   int input_size = preloaded_input;
   int timed_routine_retval; //, index;
   int input_x, input_y, input_rightmost_x; // Leftmost position of the input line on-screen.
-  int input_index = preloaded_input;
+  input_index = preloaded_input;
   z_ucs input_buffer[maximum_length + 1];
   current_input_buffer = input_buffer;
   current_input_x = &input_x;
@@ -3484,7 +3538,6 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
               input_index, input_size, maximum_length);
 
           if (input_index < input_size) {
-            /*
             // In case we're not appending at the end of the input, we'll
             // provide space for a new char in the input (and lose the rightmost
             // char in case the input line is full):
@@ -3499,7 +3552,6 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
                 input_buffer + input_index,
                 sizeof(z_ucs) * (input_size - input_index + 1
                   - (input_size < maximum_length ? 0 : 1)));
-            */
           }
           else {
             input_buffer[input_index + 1] = 0;
@@ -3520,26 +3572,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
               z_windows[active_z_window_id]->rightmargin,
               z_windows[active_z_window_id]->xsize);
 
-          /*
-          if (z_windows[active_z_window_id]->xcursorpos -1
-              + z_windows[active_z_window_id]->rightmargin
-              == z_windows[active_z_window_id]->xsize)
-            input_scroll_x++;
-          else
-            z_windows[active_z_window_id]->xcursorpos++;
-
-          buf = 0;
-          TRACE_LOG("out:%d, %d, %d\n",
-              input_size, input_scroll_x, input_display_width);
-
-          if (input_size - input_scroll_x >= input_display_width+1) {
-            buf = input_buffer[input_scroll_x + input_display_width];
-            input_buffer[input_scroll_x + input_display_width] = 0;
-          }
-          */
-
           refresh_input_line(true);
-          //refresh_cursor(active_z_window_id);
           screen_pixel_interface->update_screen();
         }
       }
@@ -3561,91 +3594,18 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
         }
       }
       else if (event_type == EVENT_WAS_CODE_CURSOR_LEFT) {
-        /*
         if (input_index > 0) {
-          if (z_windows[active_z_window_id]->xpos
-              + z_windows[active_z_window_id]->xcursorpos - 1
-              > input_x) {
-            z_windows[active_z_window_id]->xcursorpos--;
-            //refresh_cursor(active_z_window_id);
-            screen_pixel_interface->update_screen();
-          }
-          else {
-            screen_pixel_interface->copy_area(
-                input_y,
-                z_windows[active_z_window_id]->xpos
-                + z_windows[active_z_window_id]->xcursorpos,
-                input_y,
-                z_windows[active_z_window_id]->xpos
-                + z_windows[active_z_window_id]->xcursorpos - 1,
-                1,
-                input_display_width - 1);
-
-            //screen_pixel_interface->goto_yx(input_y, input_x);
-            char_buf[0] = input_buffer[input_scroll_x - 1];
-            input_scroll_x--;
-            //screen_pixel_interface->z_ucs_output(char_buf);
-            //screen_pixel_interface->goto_yx(input_y, input_x);
-            //refresh_cursor(active_z_window_id);
-            screen_pixel_interface->update_screen();
-          }
-
           input_index--;
+          refresh_input_line(true);
+          screen_pixel_interface->update_screen();
         }
-        */
       }
       else if (event_type == EVENT_WAS_CODE_CURSOR_RIGHT) {
-        /*
-        // Verify if we're at the end of input (plus one more char since
-        // the cursor must also be allowed behind the input for appending):
         if (input_index < input_size) {
-          // Check if advancing the cursor right would move it behind the
-          // rightmost allowed input column.
-          if (z_windows[active_z_window_id]->xpos
-              + z_windows[active_z_window_id]->xcursorpos
-              < input_x + input_display_width) {
-            // In this case, the cursor is still left of the right border, so
-            // we can just move it left:
-            z_windows[active_z_window_id]->xcursorpos++;
-            //refresh_cursor(active_z_window_id);
-          }
-          else {
-            // If the cursor moves behind the current rightmost position, we
-            // have to scroll the input line.
-            screen_pixel_interface->copy_area(
-                input_y,
-                input_x,
-                input_y,
-                input_x + 1,
-                1,
-                input_display_width - 1);
-
-            // Verify if the cusor is still over the input line or if it's
-            // now on the "append" column behind.
-            if (input_index == input_size - 1) {
-              // In case we're at the end we have to fill the new, empty
-              // column with a space.
-              char_buf[0] = Z_UCS_SPACE;
-            }
-            else {
-              // If the cursor is still over the input, we'll fill the
-              // rightmost column with appropriate char.
-              char_buf[0] = input_buffer[input_scroll_x + input_display_width];
-            }
-            // After determining how to fill the rightmost column, jump to
-            // the correct position on-screen, display the new char and
-            // re-position the cursor over the rightmost column.
-
-            input_scroll_x++;
-          }
-          screen_pixel_interface->update_screen();
-
-          // No matter whether we had to scroll or not, as long as we were
-          // not at the end of the input, the cursor was moved right, and thus
-          // the input index has to be altered.
           input_index++;
+          refresh_input_line(true);
+          screen_pixel_interface->update_screen();
         }
-        */
       }
       /*
       else if ( (disable_command_history == false)
@@ -3709,42 +3669,18 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
             screen_pixel_interface->get_screen_width_in_pixels());
       }
       else if (event_type == EVENT_WAS_CODE_CTRL_A) {
-        /*
         if (input_index > 0) {
-          if (input_scroll_x > 0) {
-            input_scroll_x  = 0;
-            index = input_display_width < input_size
-              ? input_display_width : input_size;
-            char_buf[0] = input_buffer[index];
-            input_buffer[index] = 0;
-            input_buffer[index] = char_buf[0];
-          }
-
-          z_windows[active_z_window_id]->xcursorpos = input_x;
           input_index = 0;
-          //refresh_cursor(active_z_window_id);
+          refresh_input_line(true);
           screen_pixel_interface->update_screen();
         }
-        */
       }
       else if (event_type == EVENT_WAS_CODE_CTRL_E) {
-        /*
-        TRACE_LOG("input_size:%d, input_display_width:%d.\n",
-            input_size, input_display_width);
-
-        if (input_size > input_display_width - 1) {
-          input_scroll_x = input_size - input_display_width + 1;
-          screen_pixel_interface->clear_to_eol();
-          z_windows[active_z_window_id]->xcursorpos
-            = input_x + input_display_width - 1;
+        if (input_index < input_size) {
+          input_index = input_size;
+          refresh_input_line(true);
+          screen_pixel_interface->update_screen();
         }
-        else
-          z_windows[active_z_window_id]->xcursorpos = input_x + input_size;
-
-        input_index = input_size;
-        //refresh_cursor(active_z_window_id);
-        screen_pixel_interface->update_screen();
-        */
       }
       else if (event_type == EVENT_WAS_CODE_CTRL_L) {
         TRACE_LOG("Got CTRL-L.\n");
