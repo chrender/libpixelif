@@ -3272,7 +3272,7 @@ void handle_scrolling(int event_type) {
 static int16_t read_line(zscii *dest, uint16_t maximum_length,
     uint16_t tenth_seconds, uint32_t verification_routine,
     uint8_t preloaded_input, int *tenth_seconds_elapsed,
-    bool UNUSED(disable_command_history), bool return_on_escape) {
+    bool disable_command_history, bool return_on_escape) {
   int timeout_millis = -1, event_type, i;
   bool input_in_progress = true;
   z_ucs input; //, buf;
@@ -3286,6 +3286,8 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
   current_input_x = &input_x;
   current_input_y = &input_y;
   history_output *preload_history = NULL;
+  int cmd_history_index = 0;
+  zscii *cmd_history_ptr;
 
   TRACE_LOG("maxlen:%d, preload: %d.\n", maximum_length, preloaded_input);
   TRACE_LOG("y: %d, %d\n",
@@ -3607,7 +3609,6 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
           screen_pixel_interface->update_screen();
         }
       }
-      /*
       else if ( (disable_command_history == false)
           && (
             (
@@ -3617,51 +3618,32 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
             || ( (event_type == EVENT_WAS_CODE_CURSOR_DOWN)
               && (cmd_history_index != 0)))) {
         TRACE_LOG("old history index: %d.\n", cmd_history_index);
+        cmd_history_index += event_type == EVENT_WAS_CODE_CURSOR_UP ? 1 : -1;
+        cmd_history_ptr = get_command_from_history(cmd_history_index - 1);
+        TRACE_LOG("cmd_history_ptr: %p.\n", cmd_history_ptr);
 
         if (cmd_history_index > 0) {
           input_size = strlen((char*)cmd_history_ptr);
-          if (input_size > input_display_width+1) {
-            input_scroll_x = input_size - input_display_width;
-            z_windows[active_z_window_id]->xcursorpos
-              = input_x + input_display_width;
-          }
-          else {
-            input_scroll_x = 0;
-            z_windows[active_z_window_id]->xcursorpos = input_x + input_size;
-          }
-
           input_index = input_size;
 
-          for (i=0; i<=input_size; i++)
+          for (i=0; i<=input_size; i++) {
             input_buffer[i] = zscii_input_char_to_z_ucs(*(cmd_history_ptr++));
-
-          TRACE_LOG("out:%d, %d, %d\n",
-              input_size, input_scroll_x, input_display_width);
-
-          if (input_size - input_scroll_x >= input_display_width+1) {
-            buf = input_buffer[input_scroll_x + input_display_width];
-            input_buffer[input_scroll_x + input_display_width] = 0;
           }
-          else
-            buf = 0;
 
-          if (buf != 0)
-            input_buffer[input_scroll_x + input_display_width] = buf;
-          screen_pixel_interface->clear_to_eol();
         }
         else {
           input_size = 0;
-          input_scroll_x = 0;
           input_index = 0;
+          input_buffer[0] = 0;
           z_windows[active_z_window_id]->xcursorpos = input_x;
-          //screen_pixel_interface->goto_yx(input_y, input_x);
-          screen_pixel_interface->clear_to_eol();
+          z_windows[active_z_window_id]->last_gylphs_xcursorpos = -1;
+          z_windows[active_z_window_id]->rightmost_filled_xpos = input_x;
+          clear_to_eol(active_z_window_id);
         }
 
-        //refresh_cursor(active_z_window_id);
+        refresh_input_line(true);
         screen_pixel_interface->update_screen();
       }
-      */
       else if (event_type == EVENT_WAS_WINCH) {
         TRACE_LOG("winch.\n");
         new_pixel_screen_size(
@@ -3699,7 +3681,6 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
     TRACE_LOG("current input_buffer: \"");
     TRACE_LOG_Z_UCS(input_buffer);
     TRACE_LOG("\".\n");
-    //TRACE_LOG("input_scroll_x:%d\n", input_scroll_x);
   }
   TRACE_LOG("x-readline-xcursorpos: %d.\n", z_windows[0]->xcursorpos);
   TRACE_LOG("x-readline-yursorpos: %d.\n", z_windows[0]->ycursorpos);
