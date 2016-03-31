@@ -3,7 +3,7 @@
  *
  * This file is part of fizmo.
  *
- * Copyright (c) 2011-2015 Christoph Ender.
+ * Copyright (c) 2011-2016 Christoph Ender.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,7 +33,7 @@
 #ifndef pixelscreen_h_INCLUDED
 #define pixelscreen_h_INCLUDED
 
-#define LIBPIXELINTERFACE_VERSION "0.1.0"
+#define LIBPIXELINTERFACE_VERSION "0.7.0"
 
 #include "../screen_interface/screen_pixel_interface.h"
 

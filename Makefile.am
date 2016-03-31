@@ -3,7 +3,7 @@
 #
 # This file is part of fizmo.
 #
-# Copyright (c) 2009-2015 Christoph Ender.
+# Copyright (c) 2009-2016 Christoph Ender.
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -62,7 +62,7 @@ install-dev:: libpixelif.a
 	echo >>$(PKGFILE)
 	echo 'Name: libpixelif' >>$(PKGFILE)
 	echo 'Description: libpixelif' >>$(PKGFILE)
-	echo 'Version: 0.1.0' >>$(PKGFILE)
+	echo 'Version: 0.170' >>$(PKGFILE)
 	echo 'Requires: libfizmo >= 0.7.7, $(LIBPIXELIF_REQS)' >>$(PKGFILE)
 	echo 'Requires.private:' >>$(PKGFILE)
 	echo 'Cflags: -I$(fizmo_build_prefix)/include/fizmo' >>$(PKGFILE)
