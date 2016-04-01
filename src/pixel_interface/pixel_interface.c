@@ -3595,6 +3595,17 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
           screen_pixel_interface->update_screen();
         }
       }
+      else if (event_type == EVENT_WAS_CODE_DELETE) {
+        if (input_index < input_size) {
+          memmove(
+              input_buffer + input_index,
+              input_buffer + input_index + 1,
+              sizeof(z_ucs)*(input_size - input_index));
+          input_size--;
+          refresh_input_line(true);
+          screen_pixel_interface->update_screen();
+        }
+      }
       else if (event_type == EVENT_WAS_CODE_CURSOR_LEFT) {
         if (input_index > 0) {
           input_index--;
