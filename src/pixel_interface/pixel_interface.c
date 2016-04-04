@@ -1995,20 +1995,13 @@ static void link_interface_to_story(struct z_story *story) {
         active_z_story->blorb_map);
 
   if (frontispiece_resource_number >= 0) {
-    printf("frontispiece resnum: %d.\n", frontispiece_resource_number);
     TRACE_LOG("frontispiece resnum: %d.\n", frontispiece_resource_number);
     if ((frontispiece = get_blorb_image(frontispiece_resource_number))!=NULL) {
-      printf("found frontispiece.\n");
       if ( (frontispiece->image_type == DRILBO_IMAGE_TYPE_RGB)
           || (frontispiece->image_type != DRILBO_IMAGE_TYPE_GRAYSCALE) ) {
-        printf("%d %d\n", total_screen_width_in_pixel, screen_height_in_pixel);
-        printf("%d %d\n", frontispiece->width, frontispiece->height);
-
         scale_x = (total_screen_width_in_pixel * 0.8) / frontispiece->width;
         scale_y = (screen_height_in_pixel * 0.8) / frontispiece->height;
         scale_factor = scale_x < scale_y ? scale_x : scale_y;
-
-        printf("%lf %lf -> %lf \n", scale_x, scale_y, scale_factor);
 
         scaled_image = scale_zimage(
             frontispiece,
@@ -2017,13 +2010,7 @@ static void link_interface_to_story(struct z_story *story) {
 
         x_offset = (total_screen_width_in_pixel - scaled_image->width) / 2;
         y_offset = (screen_height_in_pixel - scaled_image->height) / 2;
-
-        printf("%d, %d\n", x_offset, y_offset);
-
         pixel_left_shift = 8 - scaled_image->bits_per_sample;
-
-        printf("%d\n", pixel_left_shift);
-
         image_data = scaled_image->data;
 
         for (y=0; y<scaled_image->height; y++) {
@@ -2074,7 +2061,13 @@ static void link_interface_to_story(struct z_story *story) {
         screen_pixel_interface->update_screen();
         event_type = get_next_event_wrapper(&input, 0);
         erase_window(0);
+
+        free_zimage(scaled_image);
+        scaled_image = NULL;
       }
+
+      free_zimage(frontispiece);
+      frontispiece = NULL;
     }
   }
 }
