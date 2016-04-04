@@ -62,6 +62,13 @@
 #include "../screen_interface/screen_pixel_interface.h"
 #include "../locales/libpixelif_locales.h"
 
+#include <drilbo/drilbo.h>
+#include <drilbo/drilbo-jpeg.h>
+#include <drilbo/drilbo-png.h>
+#include <drilbo/drilbo-x11.h>
+
+
+
 #define Z_STYLE_NONRESET (Z_STYLE_REVERSE_VIDEO | Z_STYLE_BOLD | Z_STYLE_ITALIC)
 
 // 8.8.1

@@ -50,3 +50,6 @@ if ENABLE_TRACING
 AM_CFLAGS += -DENABLE_TRACING=
 endif
 
+AM_CFLAGS += $(libdrilbo_CFLAGS)
+LDADD += $(libdrilbo_LIBS)
+
