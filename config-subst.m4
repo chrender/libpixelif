@@ -7,5 +7,5 @@
 # pre-defined by fizmo-dist.
 
 AC_SUBST([libpixelif_CFLAGS], "-I$build_prefix_cflags $freetype2_CFLAGS")
-AC_SUBST([libpixelif_LIBS], "-L$build_prefix_libs -lpixelif $freetype2_LIBS")
+AC_SUBST([libpixelif_LIBS], "-L$build_prefix_libs -lpixelif -ldrilbo $freetype2_LIBS")
 
