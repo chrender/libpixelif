@@ -1954,27 +1954,15 @@ static void link_interface_to_story(struct z_story *story) {
         libpixelif_module_name,
         i18n_libpixelif_TURNS);
 
-  /*
+  interface_open = true;
+
   // Advance the cursor for ZTUU. This will allow the player to read
   // the first line of text before it's overwritten by the status line.
-  if (
-      (strcmp(story->serial_code, "970828") == 0)
-      &&
-      (story->release_code == (uint16_t)16)
-      &&
-      (story->checksum == (uint16_t)4485)
-     )
-    waddch(z_windows[0]->curses_window, '\n');
-
-  if (
-      (story->title != NULL)
-      &&
-      (use_xterm_title == true)
-     )
-    printf("%c]0;%s%c", 033, story->title, 007);
-  */
-
-  interface_open = true;
+  if ( (strcmp(story->serial_code, "970828") == 0)
+      && (story->release_code == (uint16_t)16)
+      && (story->checksum == (uint16_t)4485)) {
+    z_ucs_output(newline_string);
+  }
 
   frontispiece_resource_number
     = active_blorb_interface->get_frontispiece_resource_number(
