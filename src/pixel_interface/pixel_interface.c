@@ -230,7 +230,8 @@ static char *fixed_italic_font_filename = NULL;
 static char *fixed_bold_font_filename = NULL;
 static char *fixed_bold_italic_font_filename = NULL;
 static char *font_search_path = FONT_DEFAULT_SEARCH_PATH;
-static int font_height_in_pixel = 13;
+static int font_height = 13;
+static int font_height_in_pixel;
 static char last_font_size_config_value_as_string[MAX_VALUE_AS_STRING_LEN];
 static long total_lines_in_history = 0;
 static bool refresh_active = false; // When true, total_lines_in_history
@@ -1438,7 +1439,7 @@ static int parse_config_parameter(char *key, char *value) {
     free(value);
     if (*endptr != 0)
       return -1;
-    font_height_in_pixel = long_value;
+    font_height = long_value;
     return 0;
   }
   else if (strcasecmp(key, "cursor-color") == 0) {
@@ -1513,7 +1514,7 @@ static char *get_config_value(char *key)
   }
   else if (strcasecmp(key, "font-size") == 0) {
     snprintf(last_font_size_config_value_as_string, MAX_VALUE_AS_STRING_LEN,
-        "%d", font_height_in_pixel);
+        "%d", font_height);
     return last_font_size_config_value_as_string;
   }
   else if (strcasecmp(key, "cursor-color") == 0) {
@@ -1663,7 +1664,8 @@ static void link_interface_to_story(struct z_story *story) {
   }
 
   scrollbar_width *= screen_pixel_interface->get_device_to_pixel_ratio();
-  font_height_in_pixel *= screen_pixel_interface->get_device_to_pixel_ratio();
+  font_height_in_pixel =
+    font_height * screen_pixel_interface->get_device_to_pixel_ratio();
   line_height = font_height_in_pixel
     + (4 * screen_pixel_interface->get_device_to_pixel_ratio());
 
