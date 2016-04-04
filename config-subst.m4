@@ -6,6 +6,6 @@
 # The $build_prefix, $build_prefix_cflags and $build_prefix_libs are
 # pre-defined by fizmo-dist.
 
-AC_SUBST([libpixelif_CFLAGS], "-I$build_prefix_cflags $freetype2_CFLAGS")
-AC_SUBST([libpixelif_LIBS], "-L$build_prefix_libs -lpixelif -ldrilbo $freetype2_LIBS")
+AC_SUBST([libpixelif_CFLAGS], "-I$build_prefix_cflags $libdrilbo_CFLAGS $freetype2_CFLAGS")
+AC_SUBST([libpixelif_LIBS], "-L$build_prefix_libs -lpixelif $libdrilbo_LIBS $freetype2_LIBS")
 
