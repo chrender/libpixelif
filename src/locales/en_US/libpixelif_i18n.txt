@@ -4,3 +4,4 @@ Turns
 libpixelinterface version \{0s}.
 Press any key to quit.
 Function call \{0s} aborted due to error.
+libdrilbo version \{0s}.

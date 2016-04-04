@@ -4,3 +4,4 @@ Züge
 libpixelinterface version \{0s}.
 Drücken Sie eine Taste zum Beenden.
 Funktionsaufruf \{0s} aufgrund eines Fehlers abgebrochen.
+libdrilbo version \{0s}.

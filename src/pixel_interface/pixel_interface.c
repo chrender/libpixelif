@@ -4088,6 +4088,11 @@ static void output_interface_info() {
       i18n_libpixelif_LIBPIXELINTERFACE_VERSION_P0S,
       LIBPIXELINTERFACE_VERSION);
   streams_latin1_output("\n");
+  i18n_translate(
+      libpixelif_module_name,
+      i18n_ncursesw_LIBDRILBO_VERSION_P0S,
+      get_drilbo_version());
+  streams_latin1_output("\n");
 }
 
 
