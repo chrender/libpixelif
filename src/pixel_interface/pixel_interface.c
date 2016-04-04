@@ -139,7 +139,6 @@ static int v3_status_bar_right_margin = 5;
 static int v3_status_bar_left_scoreturntime_margin= 5;
 static bool hyphenation_enabled = true;
 static bool using_colors = false;
-static bool color_disabled = false;
 static bool disable_more_prompt = false;
 static z_ucs *libpixelif_more_prompt;
 static z_ucs *libpixelif_score_string;
@@ -246,11 +245,10 @@ static bool history_is_being_remeasured = false;
 // function is used to refresh these values.
 
 static char *config_option_names[] = {
-  "left-margin", "right-margin", "disable-hyphenation", "disable-color",
-  "regular-font", "italic-font", "bold-font", "bold-italic-font",
-  "fixed-regular-font", "fixed-italic-font", "fixed-bold-font",
-  "fixed-bold-italic-font", "font-search-path", "font-size",
-  "cursor-color", NULL };
+  "left-margin", "right-margin", "disable-hyphenation", "regular-font",
+  "italic-font", "bold-font", "bold-italic-font", "fixed-regular-font",
+  "fixed-italic-font", "fixed-bold-font", "fixed-bold-italic-font",
+  "font-search-path", "font-size", "cursor-color", NULL };
 
 
 static int process_glyph_string(z_ucs *z_ucs_output, int window_number,
@@ -1358,26 +1356,6 @@ static int parse_config_parameter(char *key, char *value) {
     free(value);
     return 0;
   }
-  else if (strcasecmp(key, "disable-color") == 0) {
-    if ( (value == NULL)
-        || (*value == 0)
-        || (strcmp(value, config_true_value) == 0))
-      color_disabled = true;
-    else
-      color_disabled = false;
-    free(value);
-    return 0;
-  }
-  else if (strcasecmp(key, "enable-color") == 0) {
-    if ( (value == NULL)
-        || (*value == 0)
-        || (strcmp(value, config_true_value) == 0))
-      color_disabled = false;
-    else
-      color_disabled = true;
-    free(value);
-    return 0;
-  }
   else if (strcasecmp(key, "regular-font") == 0) {
     if (regular_font_filename != NULL)
       free(regular_font_filename);
@@ -1472,16 +1450,6 @@ static char *get_config_value(char *key)
   }
   else if (strcasecmp(key, "disable-hyphenation") == 0) {
     return hyphenation_enabled == false
-      ? config_true_value
-      : config_false_value;
-  }
-  else if (strcasecmp(key, "disable-color") == 0) {
-    return color_disabled == true
-      ? config_true_value
-      : config_false_value;
-  }
-  else if (strcasecmp(key, "enable-color") == 0) {
-    return color_disabled == false
       ? config_true_value
       : config_false_value;
   }
@@ -1753,8 +1721,7 @@ static void link_interface_to_story(struct z_story *story) {
   update_fixed_width_char_width();
 
   if (ver >= 5) {
-    if ( (color_disabled == false)
-        && (screen_pixel_interface->is_colour_available() == true)) {
+    if (screen_pixel_interface->is_colour_available() == true) {
       // we'll be using colors for this story.
       using_colors = true;
       TRACE_LOG("Color enabled.\n");
