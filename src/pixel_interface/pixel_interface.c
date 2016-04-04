@@ -54,6 +54,7 @@
 #include "interpreter/wordwrap.h"
 #include "interpreter/zpu.h"
 #include "interpreter/output.h"
+#include "interpreter/blorb.h"
 
 #include "pixel_interface.h"
 #include "true_type_wordwrapper.h"
@@ -210,6 +211,7 @@ static bool timed_input_active;
 
 static struct z_window **z_windows;
 static struct z_screen_pixel_interface *screen_pixel_interface = NULL;
+static z_image *frontispiece = NULL;
 
 //static int *current_input_scroll_x, *current_input_index;
 //static int *current_input_size;
@@ -1617,6 +1619,14 @@ static void link_interface_to_story(struct z_story *story) {
   int len;
   int i;
   //int ft_error;
+  int frontispiece_resource_number;
+  z_image *scaled_image;
+  double scale_x, scale_y, scale_factor;
+  int x, y, x_offset, y_offset, pixel_left_shift;
+  uint8_t red, green, blue;
+  uint8_t *image_data;
+  int event_type;
+  z_ucs input;
 
   /*
   FT_Face current_face;
@@ -1979,6 +1989,94 @@ static void link_interface_to_story(struct z_story *story) {
   */
 
   interface_open = true;
+
+  frontispiece_resource_number
+    = active_blorb_interface->get_frontispiece_resource_number(
+        active_z_story->blorb_map);
+
+  if (frontispiece_resource_number >= 0) {
+    printf("frontispiece resnum: %d.\n", frontispiece_resource_number);
+    TRACE_LOG("frontispiece resnum: %d.\n", frontispiece_resource_number);
+    if ((frontispiece = get_blorb_image(frontispiece_resource_number))!=NULL) {
+      printf("found frontispiece.\n");
+      if ( (frontispiece->image_type == DRILBO_IMAGE_TYPE_RGB)
+          || (frontispiece->image_type != DRILBO_IMAGE_TYPE_GRAYSCALE) ) {
+        printf("%d %d\n", total_screen_width_in_pixel, screen_height_in_pixel);
+        printf("%d %d\n", frontispiece->width, frontispiece->height);
+
+        scale_x = (total_screen_width_in_pixel * 0.8) / frontispiece->width;
+        scale_y = (screen_height_in_pixel * 0.8) / frontispiece->height;
+        scale_factor = scale_x < scale_y ? scale_x : scale_y;
+
+        printf("%lf %lf -> %lf \n", scale_x, scale_y, scale_factor);
+
+        scaled_image = scale_zimage(
+            frontispiece,
+            frontispiece->width * scale_factor,
+            frontispiece->height* scale_factor);
+
+        x_offset = (total_screen_width_in_pixel - scaled_image->width) / 2;
+        y_offset = (screen_height_in_pixel - scaled_image->height) / 2;
+
+        printf("%d, %d\n", x_offset, y_offset);
+
+        pixel_left_shift = 8 - scaled_image->bits_per_sample;
+
+        printf("%d\n", pixel_left_shift);
+
+        image_data = scaled_image->data;
+
+        for (y=0; y<scaled_image->height; y++) {
+          for (x=0; x<scaled_image->width; x++) {
+
+            red = *(image_data++);
+
+            if (scaled_image->image_type == DRILBO_IMAGE_TYPE_RGB) {
+              green = *(image_data++);
+              blue = *(image_data++);
+
+              if (pixel_left_shift > 0) {
+                red <<= pixel_left_shift;
+                green <<= pixel_left_shift;
+                blue <<= pixel_left_shift;
+              }
+              else if (pixel_left_shift < 0) {
+                red >>= pixel_left_shift;
+                green >>= pixel_left_shift;
+                blue >>= pixel_left_shift;
+              }
+
+              screen_pixel_interface->draw_rgb_pixel(
+                  y_offset + y,
+                  x_offset + x,
+                  red,
+                  green,
+                  blue);
+            }
+            else if (scaled_image->image_type == DRILBO_IMAGE_TYPE_GRAYSCALE) {
+              if (pixel_left_shift > 0) {
+                red <<= pixel_left_shift;
+              }
+              else if (pixel_left_shift < 0) {
+                red >>= pixel_left_shift;
+              }
+
+              screen_pixel_interface->draw_rgb_pixel(
+                  y_offset + y,
+                  x_offset + x,
+                  red,
+                  red,
+                  red);
+            }
+          }
+        }
+
+        screen_pixel_interface->update_screen();
+        event_type = get_next_event_wrapper(&input, 0);
+        erase_window(0);
+      }
+    }
+  }
 }
 
 
