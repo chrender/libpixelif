@@ -1600,12 +1600,8 @@ static void erase_window(int16_t window_number) {
         z_windows[window_number]->ysize,
         z_to_rgb_colour(z_windows[window_number]->output_background_colour));
 
-    z_windows[window_number]->xcursorpos
-      = z_windows[window_number]->leftmargin;
-    z_windows[window_number]->last_gylphs_xcursorpos
-      = -1;
-    z_windows[window_number]->rightmost_filled_xpos
-      = z_windows[window_number]->xcursorpos;
+    reset_xcursorpos(window_number);
+
     z_windows[window_number]->ycursorpos
       = (ver >= 5 ? 0 : (z_windows[window_number]->ysize - line_height));
 
@@ -1957,16 +1953,6 @@ static void link_interface_to_story(struct z_story *story) {
     = i18n_translate_to_string(
         libpixelif_module_name,
         i18n_libpixelif_TURNS);
-
-  /*
-  //  -> "Score: x  Turns: x ",
-  libpixelif_right_status_min_size
-    = z_ucs_len(libpixelif_score_string)
-    + z_ucs_len(libpixelif_turns_string)
-    + 9; // 5 Spaces, 2 colons, 2 digits.
-  */
-
-  //refresh_cursor(active_z_window_id);
 
   /*
   // Advance the cursor for ZTUU. This will allow the player to read
