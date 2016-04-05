@@ -3718,6 +3718,10 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
       }
       else if (event_type == EVENT_WAS_CODE_CTRL_L) {
         TRACE_LOG("Got CTRL-L.\n");
+        screen_pixel_interface->update_screen();
+      }
+      else if (event_type == EVENT_WAS_CODE_CTRL_R) {
+        TRACE_LOG("Got CTRL-R.\n");
         refresh_screen();
       }
       else if (event_type == EVENT_WAS_CODE_ESC) {

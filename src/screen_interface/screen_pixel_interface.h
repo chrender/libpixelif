@@ -55,6 +55,7 @@
 #define EVENT_WAS_CODE_PAGE_DOWN    0x400A
 #define EVENT_WAS_CODE_ESC          0x400B
 #define EVENT_WAS_CODE_CTRL_L       0x400C
+#define EVENT_WAS_CODE_CTRL_R       0x400D
 
 struct z_screen_pixel_interface
 {
