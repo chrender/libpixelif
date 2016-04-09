@@ -261,6 +261,7 @@ static void z_ucs_output(z_ucs *z_ucs_output);
 
 static void clear_to_eol(int window_number) {
   int width, yspace, height, clip_bottom;
+  z_rgb_colour background_colour;
 
   if (redraw_pixel_lines_to_skip > line_height) {
     return;
@@ -298,6 +299,9 @@ static void clear_to_eol(int window_number) {
       height,
       window_number);
 
+  background_colour
+    = z_to_rgb_colour(z_windows[window_number]->output_background_colour);
+
   screen_pixel_interface->fill_area(
       (z_windows[window_number]->xpos
        + z_windows[window_number]->rightmost_filled_xpos),
@@ -305,7 +309,9 @@ static void clear_to_eol(int window_number) {
        + z_windows[window_number]->ycursorpos),
       width,
       height,
-      z_to_rgb_colour(z_windows[window_number]->output_background_colour));
+      red_from_z_rgb_colour(background_colour),
+      green_from_z_rgb_colour(background_colour),
+      blue_from_z_rgb_colour(background_colour));
 }
 
 
@@ -326,6 +332,10 @@ static void history_has_to_be_remeasured() {
 
 static void refresh_scrollbar() {
   int bar_height, bar_position;
+  z_rgb_colour scrollbar_background, scrollbar_foreground;
+
+  scrollbar_background = new_z_rgb_colour(0xc0, 0xc0, 0xc0);
+  scrollbar_foreground = new_z_rgb_colour(0x40, 0x40, 0x40);
 
   TRACE_LOG("Refreshing scrollbar.\n");
 
@@ -334,7 +344,9 @@ static void refresh_scrollbar() {
       0,
       scrollbar_width,
       screen_height_in_pixel,
-      0x00c0c0c0);
+      red_from_z_rgb_colour(scrollbar_background),
+      green_from_z_rgb_colour(scrollbar_background),
+      blue_from_z_rgb_colour(scrollbar_background));
 
   if (history_is_being_remeasured == false) {
 
@@ -384,7 +396,9 @@ static void refresh_scrollbar() {
         bar_position,
         scrollbar_width - 4,
         bar_height,
-        0x00404040);
+        red_from_z_rgb_colour(scrollbar_foreground),
+        green_from_z_rgb_colour(scrollbar_foreground),
+        blue_from_z_rgb_colour(scrollbar_foreground));
   }
 
   TRACE_LOG("Scrollbar refreshed, %f%% full.\n",
@@ -615,6 +629,7 @@ static bool break_line(int window_number) {
   z_ucs input;
   int event_type;
   int yspace_in_pixels, nof_lines_to_scroll, i, fill_ypos, fill_height;
+  z_rgb_colour background_colour;
 
   //printf("Breaking line.\n");
   TRACE_LOG("Breaking line for window %d.\n", window_number);
@@ -759,6 +774,9 @@ static bool break_line(int window_number) {
   }
 
   if (window_number != measurement_window_id) {
+    background_colour
+      = z_to_rgb_colour(z_windows[window_number]->output_background_colour);
+
     TRACE_LOG("consecutive lines: %d.\n",
         z_windows[window_number]->nof_consecutive_lines_output);
     TRACE_LOG("lines in current paragraph: %d.\n",
@@ -815,7 +833,9 @@ static bool break_line(int window_number) {
           + z_windows[window_number]->ysize - line_height,
           z_windows[window_number]->xsize,
           line_height,
-          z_to_rgb_colour(z_windows[window_number]->output_background_colour));
+          red_from_z_rgb_colour(background_colour),
+          green_from_z_rgb_colour(background_colour),
+          blue_from_z_rgb_colour(background_colour));
 
       if (event_type == EVENT_WAS_WINCH) {
         winch_found = true;
@@ -851,8 +871,9 @@ static bool break_line(int window_number) {
           fill_ypos,
           z_windows[window_number]->leftmargin,
           fill_height,
-          z_to_rgb_colour(
-            z_windows[window_number]->output_background_colour));
+          red_from_z_rgb_colour(background_colour),
+          green_from_z_rgb_colour(background_colour),
+          blue_from_z_rgb_colour(background_colour));
     }
   }
 
@@ -1547,6 +1568,8 @@ static void update_fixed_width_char_width() {
 
 
 static void erase_window(int16_t window_number) {
+  z_rgb_colour background_colour;
+
   if ( (window_number >= 0)
       && (window_number <=
         nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0))) {
@@ -1562,12 +1585,17 @@ static void erase_window(int16_t window_number) {
     if (bool_equal(z_windows[window_number]->buffering, true))
       flush_window(window_number);
 
+    background_colour
+      = z_to_rgb_colour(z_windows[window_number]->output_background_colour);
+
     screen_pixel_interface->fill_area(
         z_windows[window_number]->xpos,
         z_windows[window_number]->ypos,
         z_windows[window_number]->xsize,
         z_windows[window_number]->ysize,
-        z_to_rgb_colour(z_windows[window_number]->output_background_colour));
+        red_from_z_rgb_colour(background_colour),
+        green_from_z_rgb_colour(background_colour),
+        blue_from_z_rgb_colour(background_colour));
 
     reset_xcursorpos(window_number);
 
@@ -1583,7 +1611,6 @@ static void link_interface_to_story(struct z_story *story) {
   int bytes_to_allocate;
   int len;
   int i;
-  //int ft_error;
   int frontispiece_resource_number;
   z_image *scaled_image;
   double scale_x, scale_y, scale_factor;
@@ -1592,30 +1619,23 @@ static void link_interface_to_story(struct z_story *story) {
   uint8_t *image_data;
   int event_type;
   z_ucs input;
-
-  /*
-  FT_Face current_face;
-  FT_GlyphSlot slot;
-  FT_Bitmap bitmap;
-  int x,y;
-  */
-  //int event_type;
-  //z_ucs input;
+  z_rgb_colour background_colour;
 
   TRACE_LOG("Linking screen interface to pixel interface.\n");
   screen_pixel_interface->link_interface_to_story(story);
-
   TRACE_LOG("Linking complete.\n");
 
-  /*
-  if ((ft_error = FT_Init_FreeType(&ftlibrary))) {
-    i18n_translate_and_exit(
-        libpixelif_module_name,
-        i18n_libpixelif_FUNCTION_CALL_P0S_ABORTED_DUE_TO_ERROR,
-        -1,
-        "FT_Init_FreeType");
-  }
-  */
+  background_colour
+    = z_to_rgb_colour(screen_pixel_interface->get_default_background_colour());
+
+  screen_pixel_interface->fill_area(
+      0,
+      0, 
+      screen_pixel_interface->get_screen_width_in_pixels(),
+      screen_pixel_interface->get_screen_height_in_pixels(),
+      red_from_z_rgb_colour(background_colour),
+      green_from_z_rgb_colour(background_colour),
+      blue_from_z_rgb_colour(background_colour));
 
   font_factory = create_true_type_factory(font_search_path);
 
@@ -1712,11 +1732,6 @@ static void link_interface_to_story(struct z_story *story) {
     fixed_bold_italic_font = create_true_type_font(font_factory,
         fixed_bold_italic_font_filename, font_height_in_pixel, line_height);
   }
-
-  /*
-  printf("regular font at %p.\n", regular_font);
-  printf("bold font at %p.\n", bold_font);
-  */
 
   update_fixed_width_char_width();
 
@@ -2112,6 +2127,7 @@ static void set_buffer_mode(uint8_t new_buffer_mode) {
 static void split_window(int16_t nof_lines) {
   int pixel_delta;
   int nof_pixels = nof_lines * line_height;
+  z_rgb_colour background_colour;
 
   if (nof_pixels >= 0)
   {
@@ -2152,13 +2168,18 @@ static void split_window(int16_t nof_lines) {
       TRACE_LOG("New cursor y-pos for window 1: %d.\n",
           z_windows[1]->ycursorpos);
 
+      background_colour
+        = z_to_rgb_colour(z_windows[1]->output_background_colour);
+
       if (ver == 3) {
         screen_pixel_interface->fill_area(
             z_windows[1]->xpos,
             z_windows[1]->ypos,
             z_windows[1]->xsize,
             z_windows[1]->ysize,
-            z_to_rgb_colour(z_windows[1]->output_background_colour));
+            red_from_z_rgb_colour(background_colour),
+            green_from_z_rgb_colour(background_colour),
+            blue_from_z_rgb_colour(background_colour));
       }
     }
 
@@ -2450,17 +2471,24 @@ static history_output_target preload_history_target =
 
 
 static void draw_cursor(int cursor_x, int cursor_y) {
+  z_rgb_colour cursor_colour = z_to_rgb_colour(pixel_cursor_colour);
+
   screen_pixel_interface->fill_area(
       cursor_x,
       cursor_y,
       1 * screen_pixel_interface->get_device_to_pixel_ratio(),
       line_height - 2,
-      z_to_rgb_colour(pixel_cursor_colour));
+      red_from_z_rgb_colour(cursor_colour),
+      green_from_z_rgb_colour(cursor_colour),
+      blue_from_z_rgb_colour(cursor_colour));
 }
 
 
 static void clear_input_line() {
   int i;
+  z_rgb_colour background_colour;
+
+  background_colour = z_to_rgb_colour(z_windows[0]->output_background_colour);
 
   // Fill first input line.
   screen_pixel_interface->fill_area(
@@ -2469,7 +2497,9 @@ static void clear_input_line() {
       //z_windows[0]->xsize - z_windows[0]->rightmargin - *current_input_x + 2,
       z_windows[0]->xsize - z_windows[0]->rightmargin - *current_input_x,
       line_height,
-      z_to_rgb_colour(z_windows[0]->output_background_colour));
+      red_from_z_rgb_colour(background_colour),
+      green_from_z_rgb_colour(background_colour),
+      blue_from_z_rgb_colour(background_colour));
 
   for (i=1; i<nof_input_lines; i++) {
     screen_pixel_interface->fill_area(
@@ -2478,7 +2508,9 @@ static void clear_input_line() {
         z_windows[0]->xsize - z_windows[0]->leftmargin
         - z_windows[0]->rightmargin,
         line_height,
-        z_to_rgb_colour(z_windows[0]->output_background_colour));
+        red_from_z_rgb_colour(background_colour),
+        green_from_z_rgb_colour(background_colour),
+        blue_from_z_rgb_colour(background_colour));
   }
 }
 
@@ -3133,6 +3165,8 @@ void handle_scrolling(int event_type) {
   //int return_code;
   //int extra_padding;
   //z_ucs input;
+  z_rgb_colour background_colour;
+
 
   TRACE_LOG("Starting handle_scrolling.\n");
 
@@ -3178,6 +3212,9 @@ void handle_scrolling(int event_type) {
 
   previous_upscroll_position = top_upscroll_line;
 
+  background_colour
+    = z_to_rgb_colour(z_windows[0]->output_background_colour);
+
   if (event_type == EVENT_WAS_CODE_PAGE_UP) {
 
     top_upscroll_line += (z_windows[0]->ysize / 2);
@@ -3212,7 +3249,9 @@ void handle_scrolling(int event_type) {
         z_windows[0]->ypos,
         z_windows[0]->xsize,
         redraw_pixel_lines_to_draw,
-        z_to_rgb_colour(z_windows[0]->output_background_colour));
+        red_from_z_rgb_colour(background_colour),
+        green_from_z_rgb_colour(background_colour),
+        blue_from_z_rgb_colour(background_colour));
     //screen_pixel_interface->update_screen();
     //event_type = get_next_event_wrapper(&input, 0);
 
@@ -3260,8 +3299,9 @@ void handle_scrolling(int event_type) {
         z_windows[0]->ypos + top_line_to_draw,
         z_windows[0]->xsize,
         redraw_pixel_lines_to_draw,
-        //z_to_rgb_colour(Z_COLOUR_RED));
-        z_to_rgb_colour(z_windows[0]->output_background_colour));
+        red_from_z_rgb_colour(background_colour),
+        green_from_z_rgb_colour(background_colour),
+        blue_from_z_rgb_colour(background_colour));
     //screen_pixel_interface->update_screen();
     //event_type = get_next_event_wrapper(&input, 0);
 
@@ -4174,15 +4214,11 @@ void fizmo_register_screen_pixel_interface(struct z_screen_pixel_interface
 
 
 void set_custom_left_pixel_margin(int width) {
-  //printf("custom\n");
-  //custom_left_margin = (width > 0 ? width * fixed_width_char_width : 0);
   custom_left_margin = (width > 0 ? width * 8 : 0);
 }
 
 
 void set_custom_right_pixel_margin(int width) {
-  //printf("custom\n");
-  //custom_right_margin = (width > 0 ? width * fixed_width_char_width : 0);
   custom_right_margin = (width > 0 ? width * 8 : 0);
 }
 

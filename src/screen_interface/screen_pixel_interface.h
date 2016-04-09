@@ -80,7 +80,7 @@ struct z_screen_pixel_interface
   void (*copy_area)(int dsty, int dstx, int srcy, int srcx, int height,
       int width);
   void (*fill_area)(int startx, int starty, int xsize, int ysize,
-      z_rgb_colour colour);
+      uint8_t r, uint8_t g, uint8_t b);
   void (*set_cursor_visibility)(bool visible);
   z_colour (*get_default_foreground_colour)();
   z_colour (*get_default_background_colour)();

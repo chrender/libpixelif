@@ -260,12 +260,15 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
       background_colour,
       charcode);
   */
+
   screen_pixel_interface->fill_area(
       left_reverse_x,
       y,
       reverse_width,
       font->line_height - clip_top - clip_bottom,
-      background_colour);
+      red_from_z_rgb_colour(background_colour),
+      green_from_z_rgb_colour(background_colour),
+      blue_from_z_rgb_colour(background_colour));
 
   x += slot->bitmap_left;
 
