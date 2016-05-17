@@ -475,123 +475,129 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
           TRACE_LOG("end end_index: %d / %c, lwei: %d\n",
               end_index, wrapper->input_buffer[end_index],
               wrapper->last_word_end_index);
-          end_index++;
-          buf = wrapper->input_buffer[end_index];
-          wrapper->input_buffer[end_index] = 0;
-          if ((hyphenated_word = hyphenate(wrapper->input_buffer
-                  + wrapper->last_word_end_index + 1)) == NULL) {
-            TRACE_LOG("Error hyphenating.\n");
-          }
-          else {
-            TRACE_LOG("hyphenated word: \"");
-            TRACE_LOG_Z_UCS(hyphenated_word);
-            TRACE_LOG("\".\n");
-
-            wrap_width_position
-              = wrapper->last_word_end_advance_position
-              + wrapper->space_bitmap_width;
-            hyph_index = wrapper->last_word_end_index + 1;
-            buf_index = 0;
-            last_valid_hyph_index = -1;
-
-            // We'll now have to find the correct font for the start
-            // of our hyphenated word. For that we'll remember the current
-            // font at buffer start and iterate though all the metadata
-            // until we're at the hyphenated word's beginning.
-            hyph_font = wrapper->font_at_buffer_start;
-            tt_get_glyph_size(hyph_font, Z_UCS_MINUS,
-                &hyph_font_dash_bitmap_width, &hyph_font_dash_advance);
-            metadata_index = 0;
-
-            while ( (buf_index < z_ucs_len(hyphenated_word))
-                && (wrap_width_position + hyph_font_dash_bitmap_width
-                  <= wrapper->line_length) ) {
-              /*
-              printf("Checking buf char %ld / %c, hi:%ld\n",
-                  buf_index, hyphenated_word[buf_index],
-                  hyph_index);
-              */
-              TRACE_LOG("Checking buf char %ld / %c, hi:%ld\n",
-                  buf_index, hyphenated_word[buf_index],
-                  hyph_index);
-
-              while (metadata_index < wrapper->metadata_index) {
-                //printf("metadata: %d of %d.\n",
-                //    metadata_index, wrapper->metadata_index);
-
-                output_metadata_index =
-                  wrapper->metadata[metadata_index].output_index;
-
-                //printf("output_metadata_index: %ld, hyph_index: %ld\n",
-                //    output_metadata_index, hyph_index);
-                //printf("hyph_font: %p.\n", hyph_font);
-
-                if (output_metadata_index <= hyph_index) {
-                  if (wrapper->metadata[metadata_index].font != NULL) {
-                    hyph_font = wrapper->metadata[metadata_index].font;
-                    tt_get_glyph_size(hyph_font, Z_UCS_MINUS,
-                        &hyph_font_dash_bitmap_width, &hyph_font_dash_advance);
-                  }
-                  metadata_index++;
-                }
-                else {
-                  break;
-                }
-              }
-
-              if (hyphenated_word[buf_index] == Z_UCS_SOFT_HYPEN) {
-                last_valid_hyph_index = hyph_index + 1;
-              }
-              else if (hyphenated_word[buf_index] == Z_UCS_MINUS) {
-                last_valid_hyph_index = hyph_index;
-              }
-
-              if (hyphenated_word[buf_index] != Z_UCS_SOFT_HYPEN) {
-                //printf("hyph_font: %p.\n", hyph_font);
-                tt_get_glyph_size(hyph_font,
-                    hyphenated_word[buf_index],
-                    &advance, &bitmap_width);
-                //wrap_width_position += bitmap_width;
-                wrap_width_position += advance;
-                hyph_index++;
-              }
-
-              if ( (hyphenated_word[buf_index] == Z_UCS_SOFT_HYPEN)
-                  || (hyphenated_word[buf_index] == Z_UCS_MINUS) ) {
-                last_valid_hyph_position = wrap_width_position;
-              }
-
-              buf_index++;
-
-              /*
-              printf("(%ld + %d) = %ld <= %d\n",
-                  wrap_width_position, hyph_font_dash_bitmap_width,
-                  wrap_width_position + hyph_font_dash_bitmap_width,
-                  wrapper->line_length);
-              */
-            }
-
-            free(hyphenated_word);
-
-            if (last_valid_hyph_index != -1) {
-              /*
-              printf("Found valid hyph pos at %ld / %c.\n",
-                  last_valid_hyph_index,
-                  wrapper->input_buffer[last_valid_hyph_index]);
-              */
-              TRACE_LOG("Found valid hyph pos at %ld / %c.\n",
-                  last_valid_hyph_index,
-                  wrapper->input_buffer[last_valid_hyph_index]);
-              hyph_index = last_valid_hyph_index;
-              hyph_position = last_valid_hyph_position;
+          if (end_index > wrapper->last_word_end_index) {
+            end_index++;
+            buf = wrapper->input_buffer[end_index];
+            wrapper->input_buffer[end_index] = 0;
+            if ((hyphenated_word = hyphenate(wrapper->input_buffer
+                    + wrapper->last_word_end_index + 1)) == NULL) {
+              TRACE_LOG("Error hyphenating.\n");
             }
             else {
-              hyph_index = wrapper->last_word_end_index;
-              hyph_position = wrapper->last_word_end_advance_position;
-              //printf("no valid hyph, hyph_index: %ld.\n", hyph_index);
+              TRACE_LOG("hyphenated word: \"");
+              TRACE_LOG_Z_UCS(hyphenated_word);
+              TRACE_LOG("\".\n");
+
+              wrap_width_position
+                = wrapper->last_word_end_advance_position
+                + wrapper->space_bitmap_width;
+              hyph_index = wrapper->last_word_end_index + 1;
+              buf_index = 0;
+              last_valid_hyph_index = -1;
+
+              // We'll now have to find the correct font for the start
+              // of our hyphenated word. For that we'll remember the current
+              // font at buffer start and iterate though all the metadata
+              // until we're at the hyphenated word's beginning.
+              hyph_font = wrapper->font_at_buffer_start;
+              tt_get_glyph_size(hyph_font, Z_UCS_MINUS,
+                  &hyph_font_dash_bitmap_width, &hyph_font_dash_advance);
+              metadata_index = 0;
+
+              while ( (buf_index < z_ucs_len(hyphenated_word))
+                  && (wrap_width_position + hyph_font_dash_bitmap_width
+                    <= wrapper->line_length) ) {
+                /*
+                   printf("Checking buf char %ld / %c, hi:%ld\n",
+                   buf_index, hyphenated_word[buf_index],
+                   hyph_index);
+                   */
+                TRACE_LOG("Checking buf char %ld / %c, hi:%ld\n",
+                    buf_index, hyphenated_word[buf_index],
+                    hyph_index);
+
+                while (metadata_index < wrapper->metadata_index) {
+                  //printf("metadata: %d of %d.\n",
+                  //    metadata_index, wrapper->metadata_index);
+
+                  output_metadata_index =
+                    wrapper->metadata[metadata_index].output_index;
+
+                  //printf("output_metadata_index: %ld, hyph_index: %ld\n",
+                  //    output_metadata_index, hyph_index);
+                  //printf("hyph_font: %p.\n", hyph_font);
+
+                  if (output_metadata_index <= hyph_index) {
+                    if (wrapper->metadata[metadata_index].font != NULL) {
+                      hyph_font = wrapper->metadata[metadata_index].font;
+                      tt_get_glyph_size(hyph_font, Z_UCS_MINUS,
+                          &hyph_font_dash_bitmap_width, &hyph_font_dash_advance);
+                    }
+                    metadata_index++;
+                  }
+                  else {
+                    break;
+                  }
+                }
+
+                if (hyphenated_word[buf_index] == Z_UCS_SOFT_HYPEN) {
+                  last_valid_hyph_index = hyph_index + 1;
+                }
+                else if (hyphenated_word[buf_index] == Z_UCS_MINUS) {
+                  last_valid_hyph_index = hyph_index;
+                }
+
+                if (hyphenated_word[buf_index] != Z_UCS_SOFT_HYPEN) {
+                  //printf("hyph_font: %p.\n", hyph_font);
+                  tt_get_glyph_size(hyph_font,
+                      hyphenated_word[buf_index],
+                      &advance, &bitmap_width);
+                  //wrap_width_position += bitmap_width;
+                  wrap_width_position += advance;
+                  hyph_index++;
+                }
+
+                if ( (hyphenated_word[buf_index] == Z_UCS_SOFT_HYPEN)
+                    || (hyphenated_word[buf_index] == Z_UCS_MINUS) ) {
+                  last_valid_hyph_position = wrap_width_position;
+                }
+
+                buf_index++;
+
+                /*
+                   printf("(%ld + %d) = %ld <= %d\n",
+                   wrap_width_position, hyph_font_dash_bitmap_width,
+                   wrap_width_position + hyph_font_dash_bitmap_width,
+                   wrapper->line_length);
+                   */
+              }
+
+              free(hyphenated_word);
+
+              if (last_valid_hyph_index != -1) {
+                /*
+                   printf("Found valid hyph pos at %ld / %c.\n",
+                   last_valid_hyph_index,
+                   wrapper->input_buffer[last_valid_hyph_index]);
+                   */
+                TRACE_LOG("Found valid hyph pos at %ld / %c.\n",
+                    last_valid_hyph_index,
+                    wrapper->input_buffer[last_valid_hyph_index]);
+                hyph_index = last_valid_hyph_index;
+                hyph_position = last_valid_hyph_position;
+              }
+              else {
+                hyph_index = wrapper->last_word_end_index;
+                hyph_position = wrapper->last_word_end_advance_position;
+                //printf("no valid hyph, hyph_index: %ld.\n", hyph_index);
+              }
             }
+            wrapper->input_buffer[end_index] = buf;
+          } // endif (end_index > wrapper->last_work_end_index)
+          else {
+            hyph_index = end_index;
+            //printf("Hyph at %ld.\n", hyph_index);
           }
-          wrapper->input_buffer[end_index] = buf;
         } // endif (wrapper->enable_hyphentation == true)
         else {
           // Check for dashes inside the last word.
