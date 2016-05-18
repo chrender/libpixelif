@@ -39,6 +39,7 @@
 
 #define EVENT_WAS_TIMEOUT           0x2000
 #define EVENT_WAS_NOTHING           0x2001  // Used for polling
+#define EVENT_WAS_QUIT              0x2002
 
 #define EVENT_WAS_WINCH             0x3000
 

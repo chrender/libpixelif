@@ -244,11 +244,13 @@ static bool history_is_being_remeasured = false;
 // valid. When this flag is set idle time during the get_next_event_wrapper
 // function is used to refresh these values.
 
-static char *config_option_names[] = {
+static char *my_config_option_names[] = {
   "left-margin", "right-margin", "disable-hyphenation", "regular-font",
   "italic-font", "bold-font", "bold-italic-font", "fixed-regular-font",
   "fixed-italic-font", "fixed-bold-font", "fixed-bold-italic-font",
   "font-search-path", "font-size", "cursor-color", NULL };
+
+static char **config_option_names = my_config_option_names;
 
 
 static int process_glyph_string(z_ucs *z_ucs_output, int window_number,
@@ -1617,7 +1619,6 @@ static void link_interface_to_story(struct z_story *story) {
   int x, y, x_offset, y_offset, pixel_left_shift;
   uint8_t red, green, blue;
   uint8_t *image_data;
-  int event_type;
   z_ucs input;
   z_rgb_colour background_colour;
 
@@ -2017,7 +2018,7 @@ static void link_interface_to_story(struct z_story *story) {
         }
 
         screen_pixel_interface->update_screen();
-        event_type = get_next_event_wrapper(&input, 0);
+        get_next_event_wrapper(&input, 0);
         erase_window(0);
 
         free_zimage(scaled_image);
@@ -3516,7 +3517,12 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
     event_type = get_next_event_wrapper(&input, timeout_millis);
     TRACE_LOG("Evaluating event %d.\n", event_type);
 
-    if (event_type == EVENT_WAS_TIMEOUT) {
+    if (event_type == EVENT_WAS_QUIT) {
+      terminate_interpreter = INTERPRETER_QUIT_ALL;
+      input_in_progress = false;
+      input_size = 0;
+    }
+    else if (event_type == EVENT_WAS_TIMEOUT) {
       // Don't forget to restore current_input_buffer on recursive read.
       TRACE_LOG("timeout found.\n");
 
@@ -3866,7 +3872,11 @@ static int read_char(uint16_t tenth_seconds, uint32_t verification_routine,
     event_type = get_next_event_wrapper(&input, timeout_millis);
     //printf("event: %d\n", event_type);
 
-    if ( (event_type == EVENT_WAS_CODE_PAGE_UP)
+    if (event_type == EVENT_WAS_QUIT) {
+      terminate_interpreter = INTERPRETER_QUIT_ALL;
+      input_in_progress = false;
+    }
+    else if ( (event_type == EVENT_WAS_CODE_PAGE_UP)
         || (event_type == EVENT_WAS_CODE_PAGE_DOWN)) {
       handle_scrolling(event_type);
     }
@@ -4191,14 +4201,47 @@ static void pixelif_paragraph_removal_function(int parameter1,
 }
 
 
+static int count_config_elements(char **config_option_names) {
+  int result = 0;
+
+  while (*config_option_names != NULL) {
+    result++;
+    config_option_names++;
+  }
+
+  return result;
+}
+
+
 void fizmo_register_screen_pixel_interface(struct z_screen_pixel_interface
     *new_screen_pixel_interface) {
+  char **interface_config_options;
+  int my_config_count, if_config_count;
+  int i, config_index;
+
   if (screen_pixel_interface == NULL) {
     TRACE_LOG("Registering screen pixel interface at %p.\n",
         new_screen_pixel_interface);
 
     screen_pixel_interface = new_screen_pixel_interface;
     set_configuration_value("enable-font3-conversion", "true");
+
+    interface_config_options
+      = screen_pixel_interface->get_config_option_names();
+    my_config_count = count_config_elements(my_config_option_names);
+    if_config_count = count_config_elements(interface_config_options);
+
+    config_option_names = fizmo_malloc(
+        sizeof(char*) * (my_config_count + if_config_count + 1) );
+
+    config_index = 0;
+    for (i=0; i<my_config_count; i++) {
+      config_option_names[config_index++] = my_config_option_names[i];
+    }
+    for (i=0; i<if_config_count; i++) {
+      config_option_names[config_index++] = interface_config_options[i];
+    }
+    config_option_names[config_index] = NULL;
 
     fizmo_register_screen_interface(&z_pixel_interface);
 
