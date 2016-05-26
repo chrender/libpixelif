@@ -237,7 +237,10 @@ static bool refresh_active = false; // When true, total_lines_in_history
   // is being updated during output.
 static long total_nof_lines_stored = 0;
 
-static bool refresh_on_get_next_event = false;
+//static bool history_was_updated_and_scrollbar_should_be_refreshed = false;
+
+static bool reformat_history_during_refresh = true;
+static bool refresh_due_to_history_modification = false;
 static bool history_is_being_remeasured = false;
 // history-remeasurement means that the number of lines for paragraphs
 // stored in the history has yet to be determined. This usually occures
@@ -249,7 +252,8 @@ static char *my_config_option_names[] = {
   "left-margin", "right-margin", "disable-hyphenation", "regular-font",
   "italic-font", "bold-font", "bold-italic-font", "fixed-regular-font",
   "fixed-italic-font", "fixed-bold-font", "fixed-bold-italic-font",
-  "font-search-path", "font-size", "cursor-color", NULL };
+  "font-search-path", "font-size", "history-reformatting-during-refresh",
+  "cursor-color", NULL };
 
 static char **config_option_names = my_config_option_names;
 
@@ -336,6 +340,9 @@ static void history_has_to_be_remeasured() {
 
 static void refresh_scrollbar() {
   int bar_height, bar_position;
+  int screen_height = screen_pixel_interface->get_screen_height_in_pixels();
+  int left_width
+    = screen_pixel_interface->get_screen_width_in_pixels() - scrollbar_width;
   z_rgb_colour scrollbar_background, scrollbar_foreground;
 
   scrollbar_background = new_z_rgb_colour(0xc0, 0xc0, 0xc0);
@@ -344,10 +351,10 @@ static void refresh_scrollbar() {
   TRACE_LOG("Refreshing scrollbar.\n");
 
   screen_pixel_interface->fill_area(
-      screen_width_without_scrollbar,
+      left_width,
       0,
       scrollbar_width,
-      screen_height_in_pixel,
+      screen_height,
       red_from_z_rgb_colour(scrollbar_background),
       green_from_z_rgb_colour(scrollbar_background),
       blue_from_z_rgb_colour(scrollbar_background));
@@ -361,8 +368,8 @@ static void refresh_scrollbar() {
 
     // bar_height may be < 0 in case we've got less output than
     // screen size.
-    if (bar_height > screen_height_in_pixel) {
-      bar_height = screen_height_in_pixel;
+    if (bar_height > screen_height) {
+      bar_height = screen_height;
     }
 
     TRACE_LOG("top_upscroll_line: %d.\n", top_upscroll_line)
@@ -379,24 +386,24 @@ static void refresh_scrollbar() {
                 + z_windows[0]->lower_padding) ) );
     }
     else {
-      bar_position = (screen_height_in_pixel - bar_height);
+      bar_position = (screen_height - bar_height);
     }
     TRACE_LOG("bar_position2: %d.\n", bar_position)
 
     TRACE_LOG("bar_height: %ld %d %d %d\n",
         total_lines_in_history,
         font_height_in_pixel,
-        screen_height_in_pixel,
+        screen_height,
         bar_height);
 
     TRACE_LOG("bar-fill: %d %d %d %d\n",
-        screen_width_without_scrollbar + 2,
+        left_width + 2,
         bar_position - bar_height,
         scrollbar_width - 4,
         bar_height);
 
     screen_pixel_interface->fill_area(
-        screen_width_without_scrollbar + 2,
+        left_width + 2,
         bar_position,
         scrollbar_width - 4,
         bar_height,
@@ -586,10 +593,11 @@ static int get_next_event_wrapper(z_ucs *input, int timeout_millis) {
   TRACE_LOG("get_next_event_wrapper, history_is_being_remeasured: %d.\n",
       history_is_being_remeasured);
 
-  if (refresh_on_get_next_event == true) {
-    refresh_on_get_next_event = false;
-    refresh_screen();
+  if (refresh_due_to_history_modification == true) {
+    refresh_due_to_history_modification = false;
     history_has_to_be_remeasured();
+    refresh_screen();
+    screen_pixel_interface->update_screen();
   }
 
   if (history_is_being_remeasured == true) {
@@ -607,10 +615,11 @@ static int get_next_event_wrapper(z_ucs *input, int timeout_millis) {
         && (event_type == EVENT_WAS_NOTHING) );
 
     end_history_remeasurement(last_active_z_window_id);
+    //history_was_updated_and_scrollbar_should_be_refreshed = true;
+    refresh_scrollbar();
+    //screen_pixel_interface->update_screen();
 
     TRACE_LOG("total_lines_in_history recalc: %ld.\n", total_lines_in_history);
-    refresh_scrollbar();
-    screen_pixel_interface->update_screen();
 
     if (event_type != EVENT_WAS_NOTHING) {
       return event_type;
@@ -1451,6 +1460,22 @@ static int parse_config_parameter(char *key, char *value) {
     font_height = long_value;
     return 0;
   }
+  else if (strcasecmp(key, "history-reformatting-during-refresh") == 0) {
+    if ( (value == NULL)
+        || (*value == 0)
+        || (strcasecmp(value, config_true_value) == 0) ) {
+      free(value);
+      reformat_history_during_refresh = true;
+    }
+    else if (( value != NULL) && (strcasecmp(value, config_false_value) == 0) ) {
+      free(value);
+      reformat_history_during_refresh = false;
+    }
+    else {
+      return -1;
+    }
+    return 0;
+  }
   else if (strcasecmp(key, "cursor-color") == 0) {
     if (value == NULL)
       return -1;
@@ -1515,6 +1540,11 @@ static char *get_config_value(char *key)
     snprintf(last_font_size_config_value_as_string, MAX_VALUE_AS_STRING_LEN,
         "%d", font_height);
     return last_font_size_config_value_as_string;
+  }
+  else if (strcasecmp(key, "history-reformatting-during-refresh") == 0) {
+    return reformat_history_during_refresh == true
+      ? config_true_value
+      : config_false_value;
   }
   else if (strcasecmp(key, "cursor-color") == 0) {
     return z_colour_names[pixel_cursor_colour];
@@ -3155,8 +3185,10 @@ static void refresh_screen() {
     display_status_line();
   }
 
-  refresh_scrollbar();
-  //screen_pixel_interface->update_screen();
+  if (reformat_history_during_refresh == true) {
+    finish_history_remeasurement();
+    refresh_scrollbar();
+  }
 
   z_windows[0]->nof_consecutive_lines_output = 0;
   refresh_active = false;
@@ -4109,7 +4141,7 @@ static bool input_must_be_repeated_by_story() {
 
 static void game_was_restored_and_history_modified() {
   TRACE_LOG("Setting history_is_being_remeasured to true.\n");
-  refresh_on_get_next_event = true;
+  refresh_due_to_history_modification = true;
 }
 
 
@@ -4379,6 +4411,7 @@ void new_pixel_screen_size(int newysize, int newxsize) {
   }
 
   refresh_screen();
+  screen_pixel_interface->update_screen();
 
   for (i=0; i<nof_active_z_windows; i++) {
     z_windows[i]->nof_consecutive_lines_output = consecutive_lines_buffer[i];
