@@ -1659,6 +1659,7 @@ static void link_interface_to_story(struct z_story *story) {
   uint8_t *image_data;
   z_ucs input;
   z_rgb_colour background_colour;
+  int winch_count, event_code;
 
   TRACE_LOG("Linking screen interface to pixel interface.\n");
   screen_pixel_interface->link_interface_to_story(story);
@@ -2056,7 +2057,16 @@ static void link_interface_to_story(struct z_story *story) {
         }
 
         screen_pixel_interface->update_screen();
-        get_next_event_wrapper(&input, 0);
+        winch_count = 0;
+        while (winch_count < 2) {
+          event_code = get_next_event_wrapper(&input, 0);
+          if (event_code == EVENT_WAS_WINCH) {
+            winch_count++;
+          }
+          else {
+            break;
+          }
+        }
         erase_window(0);
 
         free_zimage(scaled_image);
