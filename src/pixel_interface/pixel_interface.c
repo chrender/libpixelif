@@ -237,6 +237,7 @@ static bool refresh_active = false; // When true, total_lines_in_history
   // is being updated during output.
 static long total_nof_lines_stored = 0;
 
+static bool refresh_on_get_next_event = false;
 static bool history_is_being_remeasured = false;
 // history-remeasurement means that the number of lines for paragraphs
 // stored in the history has yet to be determined. This usually occures
@@ -259,6 +260,7 @@ static void wordwrap_output_style(void *window_number, uint32_t style_data);
 static true_type_font *evaluate_font(z_style text_style, z_font font);
 static history_output_target history_target;
 static void z_ucs_output(z_ucs *z_ucs_output);
+static void refresh_screen();
 
 
 static void clear_to_eol(int window_number) {
@@ -583,6 +585,12 @@ static int get_next_event_wrapper(z_ucs *input, int timeout_millis) {
 
   TRACE_LOG("get_next_event_wrapper, history_is_being_remeasured: %d.\n",
       history_is_being_remeasured);
+
+  if (refresh_on_get_next_event == true) {
+    refresh_on_get_next_event = false;
+    refresh_screen();
+    history_has_to_be_remeasured();
+  }
 
   if (history_is_being_remeasured == true) {
 
@@ -3044,7 +3052,7 @@ static void refresh_screen() {
       total_screen_width_in_pixel, screen_height_in_pixel);
   erase_window(0);
 
-  finish_history_remeasurement();
+  //finish_history_remeasurement();
   disable_more_prompt = true;
   init_screen_redraw();
   TRACE_LOG("History: %p\n", history);
@@ -4100,10 +4108,7 @@ static bool input_must_be_repeated_by_story() {
 
 static void game_was_restored_and_history_modified() {
   TRACE_LOG("Setting history_is_being_remeasured to true.\n");
-  history_has_to_be_remeasured();
-  if (interface_open == true) {
-    refresh_screen();
-  }
+  refresh_on_get_next_event = true;
 }
 
 
