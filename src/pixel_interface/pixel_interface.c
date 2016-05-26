@@ -3311,6 +3311,7 @@ void handle_scrolling(int event_type) {
       // End up-scroll.
       end_screen_redraw();
       refresh_screen();
+      screen_pixel_interface->update_screen();
       return;
     }
 
@@ -3638,6 +3639,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
         // End up-scroll.
         end_screen_redraw();
         refresh_screen();
+        screen_pixel_interface->update_screen();
       }
 
       if (event_type == EVENT_WAS_INPUT) {
