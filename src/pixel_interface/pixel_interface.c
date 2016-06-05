@@ -265,6 +265,7 @@ static true_type_font *evaluate_font(z_style text_style, z_font font);
 static history_output_target history_target;
 static void z_ucs_output(z_ucs *z_ucs_output);
 static void refresh_screen();
+static void refresh_screen_without_paragraph_attributes() __attribute__((unused));
 
 
 static void clear_to_eol(int window_number) {
@@ -3074,6 +3075,140 @@ void finish_history_remeasurement() {
 
 
 static void refresh_screen() {
+  int i, last_active_z_window_id = -1;
+  int y_height_to_fill;
+  int nof_paragraphs_to_repeat;
+  int paragraph_attr1, paragraph_attr2;
+  int rewind_return_code;
+  int saved_padding;
+
+  if (active_z_window_id != 0) {
+    last_active_z_window_id = active_z_window_id;
+    switch_to_window(0);
+  }
+
+  refresh_active = true;
+
+  TRACE_LOG("Refreshing screen, size: %d*%d.\n",
+      total_screen_width_in_pixel, screen_height_in_pixel);
+  erase_window(0);
+
+  finish_history_remeasurement();
+  disable_more_prompt = true;
+  init_screen_redraw();
+  TRACE_LOG("History: %p\n", history);
+
+  y_height_to_fill
+    = z_windows[0]->ysize
+    //- nof_input_lines  * line_height
+    - z_windows[0]->lower_padding;
+  /*
+  printf("y_height_to_fill: %d, nof_input_lines: %d\n",
+      y_height_to_fill, nof_input_lines);
+  */
+
+  for (i=0; i<nof_active_z_windows - (statusline_window_id >= 0 ? 1 : 0); i++) {
+    if ( (ver == 6) || (i != 1) ) {
+      z_windows[i]->text_style = Z_STYLE_ROMAN;
+      z_windows[i]->output_text_style = Z_STYLE_ROMAN;
+      z_windows[i]->font_type = Z_FONT_NORMAL;
+      z_windows[i]->output_font = Z_FONT_NORMAL;
+      z_windows[i]->output_true_type_font = regular_font;
+    }
+  }
+
+  nof_paragraphs_to_repeat = 0;
+  do {
+    paragraph_attr1 = 0;
+    paragraph_attr2 = 0;
+    // In case we're repeating the very last paragraph this likely
+    // won't have its height stored in the history (simply because
+    // it hasn't been finished yet). In order to detect this we'll
+    // set paragraph_attr1 to 0 and compare later.
+
+    TRACE_LOG("history_screen_line: %d.\n", history_screen_line);
+    TRACE_LOG("pre-rewind: paragraph_attr1:%d, paragraph_attr2: %d.\n",
+        paragraph_attr1, paragraph_attr2);
+
+    // Rewind history by one paragraph
+    rewind_return_code = output_rewind_paragraph(history, NULL,
+        &paragraph_attr1, &paragraph_attr2);
+    if (rewind_return_code == 0) {
+      TRACE_LOG("rewind: paragraph_attr1:%d, paragraph_attr2: %d.\n",
+          paragraph_attr1, paragraph_attr2);
+      TRACE_LOG("history_screen_line: %d.\n", history_screen_line);
+      nof_paragraphs_to_repeat++;
+
+      // Adapted line number that history is currently pointing to.
+      history_screen_line
+        += paragraph_attr1 != 0 ? paragraph_attr1 : 1;
+    }
+    else if (rewind_return_code == 1) {
+      //printf("buffer back encountered.\n");
+      // buffer back encountered
+      break;
+    }
+    //printf("history_screen_line * line_height: %d, y_height_to_fill:%d.\n",
+    //    history_screen_line * line_height, y_height_to_fill);
+  }
+  // Scroll up until we're above the lowest line to refresh.
+  while (history_screen_line * line_height <= y_height_to_fill);
+
+  saved_padding = z_windows[0]->lower_padding;
+  //printf("lower_padding: %d.\n", z_windows[0]->lower_padding);
+  z_windows[0]->lower_padding += (nof_input_lines - 1) * line_height;
+  //printf("lower_padding: %d.\n", z_windows[0]->lower_padding);
+  z_windows[0]->ycursorpos
+    = z_windows[0]->ysize
+    - z_windows[0]->lower_padding
+    - line_height;
+  TRACE_LOG("refresh ycursorpos: %d.\n", z_windows[0]->ycursorpos);
+  reset_xcursorpos(0);
+  freetype_wordwrap_reset_position(z_windows[0]->wordwrapper);
+  output_repeat_paragraphs(history, nof_paragraphs_to_repeat, true, false);
+  flush_window(0);
+  clear_to_eol(0);
+  z_windows[0]->lower_padding = saved_padding;
+
+  end_screen_redraw();
+
+  z_windows[0]->ycursorpos
+    = z_windows[0]->ysize
+    - (nof_input_lines > 1 ? nof_input_lines : 1) * line_height
+    - z_windows[0]->lower_padding;
+  if (input_line_on_screen == true) {
+    *current_input_y = z_windows[0]->ypos + z_windows[0]->ycursorpos;
+    refresh_input_line(true);
+  }
+  else {
+    reset_xcursorpos(0);
+    freetype_wordwrap_reset_position(z_windows[0]->wordwrapper);
+  }
+
+  if (last_active_z_window_id != -1) {
+    switch_to_window(last_active_z_window_id);
+  }
+
+  refresh_upper_window();
+
+  if (ver <= 3) {
+    display_status_line();
+  }
+
+  refresh_scrollbar();
+  screen_pixel_interface->update_screen();
+
+  z_windows[0]->nof_consecutive_lines_output = 0;
+  refresh_active = false;
+  disable_more_prompt = false;
+}
+
+
+// This method isn't currently used since it still contains one bug where
+// the last word in a paragraph is not correctly wrapped. Currently the
+// pixel_interface instead relies upon remeasring the entire history first
+// and then redrawing the screen (which currently appears to be fast enough).
+static void refresh_screen_without_paragraph_attributes() {
   int last_active_z_window_id = -1;
   int y_height_to_fill;
   int saved_padding, last_output_height, nof_paragraphs_to_repeat;
