@@ -78,7 +78,8 @@ true_type_wordwrapper *create_true_type_wordwrapper(
     void *destination_parameter, bool hyphenation_enabled);
 void destroy_freetype_wrapper(true_type_wordwrapper * wrapper);
 int get_current_pixel_position(true_type_wordwrapper *wrapper);
-void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input);
+void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input,
+    bool end_line_after_end_of_input);
 void freetype_wordwrap_flush_output(true_type_wordwrapper *wrapper);
 void freetype_wordwrap_insert_metadata(true_type_wordwrapper *wrapper,
     void (*metadata_output)(void *ptr_parameter, uint32_t int_parameter),

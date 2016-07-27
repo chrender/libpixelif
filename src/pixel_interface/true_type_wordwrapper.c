@@ -16,7 +16,7 @@
  *    documentation and/or other materials provided with the distribution.
  * 3. The name of the author may not be used to endorse or promote products
  *    derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
  * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
@@ -338,7 +338,7 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index,
   }
 
   chars_sent = flush_index + 1;
-  TRACE_LOG("chars_sent: %ld, dst: %p, src: %p, bufindex: %d\n",
+  TRACE_LOG("chars_sent: %ld, dst: %p, src: %p, bufindex: %ld\n",
       chars_sent,
       wrapper->input_buffer,
       wrapper->input_buffer + flush_index,
@@ -356,7 +356,8 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index,
 }
 
 
-void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
+void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input,
+    bool end_line_after_end_of_input) {
   z_ucs *hyphenated_word, *input_index = input;
   z_ucs current_char, last_char, buf;
   long wrap_width_position, end_index, hyph_index;
@@ -365,6 +366,7 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
   int hyph_font_dash_bitmap_width, hyph_font_dash_advance;
   int metadata_index = 0, advance, bitmap_width;
   true_type_font *hyph_font;
+  bool process_line_end = end_line_after_end_of_input;
 
   // In order to build an algorithm most suitable to both enabled and
   // disabled hyphenation, we'll collect input until we'll find the first
@@ -373,14 +375,14 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
 
   // Invoking a separate flush method makes sense since it also allows
   // a simple external triggering of the flush.
-  
+
   // To minimize calculations, we keeping track of the last complete word's
   // rightmost char in last_word_end_index and the "word's last advance
   // position" in last_word_end_advance_position.
 
   // An "advance position" sums up all the "horiAdvance" distances for all
   // glyphs in the current word.
-  
+
   // last_word_end_advance_position contains the advance position of
   // the last complete word/char which still fits into the current line.
   // This is updated every time we hit a space (so we can easily find the last
@@ -393,45 +395,54 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
     = (wrapper->current_buffer_index > 0)
     ? wrapper->input_buffer[wrapper->current_buffer_index - 1]
     : 0;
- 
-  while (*input_index != 0) {
-    current_char = *input_index;
 
-    ensure_additional_buffer_capacity(wrapper, 1);
-    wrapper->input_buffer[wrapper->current_buffer_index] = current_char;
+  while ( ((input != NULL) && (*input_index != 0))
+      || (process_line_end == true) ) {
 
-    TRACE_LOG("buffer-add: %c / %ld / %p / cap:%ld / lweap:%ld \n",
-        (char)current_char,
-        wrapper->current_buffer_index,
-        wrapper->input_buffer + wrapper->current_buffer_index,
-        wrapper->current_advance_position,
-        wrapper->last_word_end_advance_position);
+    if ((input != NULL) && (*input_index != 0)) {
+      current_char = *input_index;
 
-    wrapper->current_buffer_index++;
+      ensure_additional_buffer_capacity(wrapper, 1);
+      wrapper->input_buffer[wrapper->current_buffer_index] = current_char;
 
-    tt_get_glyph_size(wrapper->current_font, current_char,
-        &advance, &bitmap_width);
-    wrapper->current_width_position
-      = wrapper->current_advance_position + bitmap_width;
-    //printf("current_width_position: %ld for '%c'\n",
-    //    wrapper->current_width_position, current_char);
-    wrapper->current_advance_position += advance;
+      TRACE_LOG("buffer-add: %c / %ld / %p / cap:%ld / lweap:%ld \n",
+          (char)current_char,
+          wrapper->current_buffer_index,
+          wrapper->input_buffer + wrapper->current_buffer_index,
+          wrapper->current_advance_position,
+          wrapper->last_word_end_advance_position);
 
-    /*
-    printf("check:'%c',font:%p,advpos,ll,lweim,cwwp,bmw: %ld/%d/%ld/%ld/%d\n",
-        current_char,
-        wrapper->current_font,
-        wrapper->current_advance_position,
-        wrapper->line_length,
-        wrapper->last_word_end_index,
-        wrapper->current_width_position,
-        bitmap_width);
+      wrapper->current_buffer_index++;
 
-    printf("bmw, lwp, ll: %d, %ld, %d.\n",
-        bitmap_width,
-        wrapper->last_width_position,
-        wrapper->line_length);
-    */
+      tt_get_glyph_size(wrapper->current_font, current_char,
+          &advance, &bitmap_width);
+      wrapper->current_width_position
+        = wrapper->current_advance_position + bitmap_width;
+      //printf("current_width_position: %ld for '%c'\n",
+      //    wrapper->current_width_position, current_char);
+      wrapper->current_advance_position += advance;
+
+      /*
+      printf("check:'%c',font:%p,advpos,ll,lweim,cwwp,bmw: %ld/%d/%ld/%ld/%d\n",
+          current_char,
+          wrapper->current_font,
+          wrapper->current_advance_position,
+          wrapper->line_length,
+          wrapper->last_word_end_index,
+          wrapper->current_width_position,
+          bitmap_width);
+
+      printf("bmw, lwp, ll: %d, %ld, %d.\n",
+          bitmap_width,
+          wrapper->last_width_position,
+          wrapper->line_length);
+      */
+    }
+    else {
+      current_char = 0;
+      bitmap_width = 0;
+      advance = 0;
+    }
 
     if ( (
           (bitmap_width == 0)
@@ -453,11 +464,13 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
       // In case we're past the right margin, we'll take a look how
       // to best break the line.
 
-      if ((current_char == Z_UCS_SPACE) || (current_char == Z_UCS_NEWLINE) ) {
+      if ((current_char == Z_UCS_SPACE) || (current_char == Z_UCS_NEWLINE)
+          || (((input == NULL) || (*input_index == 0))
+            && (process_line_end == true)) ) {
         // Here we've found a completed word past the lind end. At this
         // point we'll break the line without exception.
         /*
-        printf("last_word_end_width_position: %ld, line_length: %d.\n", 
+        printf("last_word_end_width_position: %ld, line_length: %d.\n",
             wrapper->last_word_end_width_position, wrapper->line_length);
         */
 
@@ -531,7 +544,8 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
                     if (wrapper->metadata[metadata_index].font != NULL) {
                       hyph_font = wrapper->metadata[metadata_index].font;
                       tt_get_glyph_size(hyph_font, Z_UCS_MINUS,
-                          &hyph_font_dash_bitmap_width, &hyph_font_dash_advance);
+                          &hyph_font_dash_bitmap_width,
+                          &hyph_font_dash_advance);
                     }
                     metadata_index++;
                   }
@@ -716,7 +730,7 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
         wrapper->last_width_position
           = wrapper->current_advance_position
           + bitmap_width;
-          
+
         wrapper->last_char_in_line_index
           = 0;
 
@@ -768,9 +782,19 @@ void freetype_wrap_z_ucs(true_type_wordwrapper *wrapper, z_ucs *input) {
         = wrapper->current_buffer_index - 1;
     }
 
-    input_index++;
-    last_char = current_char;
+    if ( (input != NULL) && (*input_index != 0) ) {
+      input_index++;
+      last_char = current_char;
+    }
+    else if (process_line_end == true) {
+      process_line_end = false;
+    }
   }
+}
+
+
+void end_current_line(true_type_wordwrapper *wrapper) {
+  freetype_wrap_z_ucs(wrapper, NULL, true);
 }
 
 
@@ -786,7 +810,7 @@ void freetype_wordwrap_insert_metadata(true_type_wordwrapper *wrapper,
     void (*metadata_output)(void *ptr_parameter, uint32_t int_parameter),
     void *ptr_parameter, uint32_t int_parameter, true_type_font *new_font) {
   size_t bytes_to_allocate;
-  
+
   TRACE_LOG("freetype_wordwrap_insert_metadata, font %p.\n", new_font);
 
   // Before adding new metadata, check if we need to allocate more space.

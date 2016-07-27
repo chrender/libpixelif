@@ -239,7 +239,7 @@ static long total_nof_lines_stored = 0;
 
 //static bool history_was_updated_and_scrollbar_should_be_refreshed = false;
 
-static bool reformat_history_during_refresh = true;
+static bool reformat_history_during_refresh = false;
 static bool refresh_due_to_history_modification = false;
 static bool history_is_being_remeasured = false;
 // history-remeasurement means that the number of lines for paragraphs
@@ -266,6 +266,7 @@ static history_output_target history_target;
 static void z_ucs_output(z_ucs *z_ucs_output);
 static void refresh_screen();
 static void refresh_screen_without_paragraph_attributes() __attribute__((unused));
+static void refresh_screen_with_paragraph_attributes() __attribute__((unused));
 
 
 static void clear_to_eol(int window_number) {
@@ -1590,7 +1591,7 @@ static void z_ucs_output(z_ucs *z_ucs_output) {
       }
       else {
         freetype_wrap_z_ucs(
-          z_windows[active_z_window_id]->wordwrapper, z_ucs_output);
+          z_windows[active_z_window_id]->wordwrapper, z_ucs_output, false);
       }
     }
     TRACE_LOG("z_ucs_output finished.\n");
@@ -1671,7 +1672,7 @@ static void link_interface_to_story(struct z_story *story) {
 
   screen_pixel_interface->fill_area(
       0,
-      0, 
+      0,
       screen_pixel_interface->get_screen_width_in_pixels(),
       screen_pixel_interface->get_screen_height_in_pixels(),
       red_from_z_rgb_colour(background_colour),
@@ -2506,7 +2507,7 @@ static void preload_history_set_colour(z_colour UNUSED(foreground),
 
 
 static void preload_history_z_ucs_output(z_ucs *output) {
-  freetype_wrap_z_ucs(preloaded_wordwrapper, output);
+  freetype_wrap_z_ucs(preloaded_wordwrapper, output, false);
 }
 
 
@@ -3075,6 +3076,11 @@ void finish_history_remeasurement() {
 
 
 static void refresh_screen() {
+  refresh_screen_without_paragraph_attributes();
+}
+
+
+static void refresh_screen_with_paragraph_attributes() {
   int i, last_active_z_window_id = -1;
   int y_height_to_fill;
   int nof_paragraphs_to_repeat;
@@ -3213,6 +3219,9 @@ static void refresh_screen_without_paragraph_attributes() {
   int y_height_to_fill;
   int saved_padding, last_output_height, nof_paragraphs_to_repeat;
 
+  //int event_type;
+  //z_ucs input;
+
   if (active_z_window_id != 0) {
     last_active_z_window_id = active_z_window_id;
     switch_to_window(0);
@@ -3253,9 +3262,7 @@ static void refresh_screen_without_paragraph_attributes() {
       nof_paragraphs_to_repeat = 1;
     }
 
-    z_windows[0]->xcursorpos = 0;
-    z_windows[0]->last_gylphs_xcursorpos = -1;
-    z_windows[0]->rightmost_filled_xpos = z_windows[0]->xcursorpos;
+    reset_xcursorpos(0);
     z_windows[0]->ycursorpos = y_height_to_fill - line_height;
     z_windows[0]->lower_padding =
       z_windows[0]->ysize - y_height_to_fill;
@@ -3280,7 +3287,12 @@ static void refresh_screen_without_paragraph_attributes() {
     //printf("Start paragraph repetition.\n");
     nof_break_line_invocations = 0;
     output_repeat_paragraphs(history, nof_paragraphs_to_repeat, true, false);
+    freetype_wrap_z_ucs(z_windows[0]->wordwrapper, NULL, true);
     flush_window(0);
+
+    //screen_pixel_interface->update_screen();
+    //event_type = get_next_event_wrapper(&input, 0);
+
     clear_to_eol(0);
     freetype_wordwrap_reset_position(z_windows[0]->wordwrapper);
     //printf("End paragraph repetition.\n");
