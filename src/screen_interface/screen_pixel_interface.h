@@ -62,7 +62,8 @@ struct z_screen_pixel_interface
 {
   void (*draw_rgb_pixel)(int y, int x, uint8_t r, uint8_t g, uint8_t b);
   bool (*is_input_timeout_available)();
-  int (*get_next_event)(z_ucs *input, int timeout_millis, bool poll_only);
+  int (*get_next_event)(z_ucs *input, int timeout_millis, bool poll_only,
+      bool history_finished_remeasuring);
 
   char* (*get_interface_name)();
   bool (*is_colour_available)();

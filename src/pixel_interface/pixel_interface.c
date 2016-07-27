@@ -247,6 +247,7 @@ static bool history_is_being_remeasured = false;
 // when the screen is resized and so the stored values are no longer
 // valid. When this flag is set idle time during the get_next_event_wrapper
 // function is used to refresh these values.
+static bool history_finished_remeasuring = false;
 
 static char *my_config_option_names[] = {
   "left-margin", "right-margin", "disable-hyphenation", "regular-font",
@@ -569,6 +570,7 @@ static void remeasure_next_paragraph() {
     //    total_lines_in_history);
     TRACE_LOG("Finished remeasuring, %d lines in history.\n",
         total_lines_in_history);
+    history_finished_remeasuring = true;
   }
   else {
     // Not finished, process next paragraph.
@@ -591,6 +593,7 @@ static void end_history_remeasurement(int last_active_z_window_id) {
 
 static int get_next_event_wrapper(z_ucs *input, int timeout_millis) {
   int event_type = EVENT_WAS_NOTHING, last_active_z_window_id;
+  int result;
 
   TRACE_LOG("get_next_event_wrapper, history_is_being_remeasured: %d.\n",
       history_is_being_remeasured);
@@ -610,7 +613,7 @@ static int get_next_event_wrapper(z_ucs *input, int timeout_millis) {
       remeasure_next_paragraph();
       TRACE_LOG("Polling for next event.\n");
       event_type = screen_pixel_interface->get_next_event(
-          input, timeout_millis, true);
+          input, timeout_millis, true, false);
       TRACE_LOG("event_type: %d\n", event_type);
     }
     while ( (history_is_being_remeasured == true)
@@ -630,7 +633,10 @@ static int get_next_event_wrapper(z_ucs *input, int timeout_millis) {
 
   TRACE_LOG("Waiting for next event.\n");
 
-  return screen_pixel_interface->get_next_event(input, timeout_millis, false);
+  result = screen_pixel_interface->get_next_event(
+      input, timeout_millis, false, history_finished_remeasuring);
+  history_finished_remeasuring = false;
+  return result;
 }
 
 
@@ -2101,7 +2107,8 @@ static int pixel_close_interface(z_ucs *error_message) {
     screen_pixel_interface->update_screen();
 
     do
-      event_type = screen_pixel_interface->get_next_event(&input, 0, false);
+      event_type = screen_pixel_interface->get_next_event(
+          &input, 0, false, false);
     while (event_type == EVENT_WAS_WINCH);
   }
 
@@ -3076,6 +3083,22 @@ void finish_history_remeasurement() {
 
 
 static void refresh_screen() {
+  z_rgb_colour scrollbar_background;
+  int screen_height = screen_pixel_interface->get_screen_height_in_pixels();
+  int left_width
+    = screen_pixel_interface->get_screen_width_in_pixels() - scrollbar_width;
+
+  scrollbar_background = new_z_rgb_colour(0xc0, 0xc0, 0xc0);
+
+  screen_pixel_interface->fill_area(
+      left_width,
+      0,
+      scrollbar_width,
+      screen_height,
+      red_from_z_rgb_colour(scrollbar_background),
+      green_from_z_rgb_colour(scrollbar_background),
+      blue_from_z_rgb_colour(scrollbar_background));
+
   refresh_screen_without_paragraph_attributes();
 }
 
@@ -3344,6 +3367,9 @@ static void refresh_screen_without_paragraph_attributes() {
 
   if (reformat_history_during_refresh == true) {
     finish_history_remeasurement();
+    refresh_scrollbar();
+  }
+  else if (history_is_being_remeasured != true) {
     refresh_scrollbar();
   }
 
