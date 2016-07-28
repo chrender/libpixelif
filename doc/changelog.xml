@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <changelog>
   <change version="0.7.0">
-    <logentry>First implementation.</logentry>
+    <datetime day-of-week="Thu" month="7" day="28" hour="19"
+      minute="38" second="43" timezone="CEST" year="2016"/>
+    <logentry>The “libpixelif” interface translates output from the fizmo Z-Machine to a pixel-based interface by using the freetype2 engine, providing proportional font display, antialiasing, and subpixel-rendering along with HiDPI support.</logentry>
+    <logentry>It uses the “Fira Sans” and “Fira Mono” font faces which were made by Erik Spiekermann and Ralph du Carrois.</logentry>
   </change>
 </changelog>
 
