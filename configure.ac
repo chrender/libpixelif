@@ -43,8 +43,8 @@ AC_INIT(
  libpixelif)
 
 libpixelif_reqs="freetype2"
-PKG_CHECK_MODULES([libfizmo], [libfizmo >= 0.7.10])
-PKG_CHECK_MODULES([libdrilbo], [libdrilbo >= 0.2.6])
+PKG_CHECK_MODULES([libfizmo], [libfizmo >= 0.7.12])
+PKG_CHECK_MODULES([libdrilbo], [libdrilbo >= 0.2.8])
 m4_include(config-libs.m4)
 
 AC_CONFIG_AUX_DIR([.])

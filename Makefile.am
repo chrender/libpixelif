@@ -62,11 +62,11 @@ install-dev:: libpixelif.a
 	echo >>$(PKGFILE)
 	echo 'Name: libpixelif' >>$(PKGFILE)
 	echo 'Description: libpixelif' >>$(PKGFILE)
-	echo 'Version: 0.170' >>$(PKGFILE)
-	echo 'Requires: libfizmo >= 0.7.7, $(LIBPIXELIF_REQS)' >>$(PKGFILE)
+	echo 'Version: 0.7.1' >>$(PKGFILE)
+	echo 'Requires: libfizmo >= 0.7.12, libdrilbo >= 0.2.8, $(LIBPIXELIF_REQS)' >>$(PKGFILE)
 	echo 'Requires.private:' >>$(PKGFILE)
 	echo 'Cflags: -I$(fizmo_build_prefix)/include/fizmo' >>$(PKGFILE)
-	echo 'Libs: -L$(fizmo_build_prefix)/lib/fizmo -lpixelif' >>$(PKGFILE)
+	echo 'Libs: -L$(fizmo_build_prefix)/lib/fizmo -lpixelif -ldrilbo' >>$(PKGFILE)
 	echo >>$(PKGFILE)
 
 install-data-local:
