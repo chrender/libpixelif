@@ -38,13 +38,13 @@ AC_ARG_ENABLE([tracing],
 
 AC_INIT(
  [libpixelif],
- [0.7.1],
+ [0.7.2],
  fizmo@spellbreaker.org,
  libpixelif)
 
 libpixelif_reqs="freetype2"
-PKG_CHECK_MODULES([libfizmo], [libfizmo >= 0.7.12])
-PKG_CHECK_MODULES([libdrilbo], [libdrilbo >= 0.2.8])
+PKG_CHECK_MODULES([libfizmo], [libfizmo >= 0.7.13])
+PKG_CHECK_MODULES([libdrilbo], [libdrilbo >= 0.2.9])
 m4_include(config-libs.m4)
 
 AC_CONFIG_AUX_DIR([.])
@@ -53,7 +53,8 @@ AC_PROG_CC
 AC_PROG_RANLIB
 AM_PROG_AR
 
-AC_SUBST([DEV_BUILD_PREFIX], "$DESTDIR$prefix")
+AM_CONDITIONAL([FIZMO_DIST_BUILD], [test "x" = ""])
+
 AC_SUBST([LIBPIXELIF_REQS], $libpixelif_reqs)
 
 AM_CONDITIONAL([ENABLE_TRACING],

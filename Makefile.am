@@ -34,10 +34,14 @@ AUTOMAKE_OPTIONS = -Wno-override
 localedir = $(datarootdir)/fizmo/locales
 fontdir = $(datarootdir)/fizmo/fonts
 
-fizmo_build_prefix=$(DEV_BUILD_PREFIX)
+if FIZMO_DIST_BUILD
+  dev_prefix=$(FIZMO_DIST_BUILD_PREFIX)
+else
+  dev_prefix=$(prefix)
+endif
 
-PKG_DIR = $(fizmo_build_prefix)/lib/pkgconfig
-PKGFILE = $(PKG_DIR)/libpixelif.pc
+pkg_dir = $(DESTDIR)$(dev_prefix)/lib/pkgconfig
+pkgfile = $(pkg_dir)/libpixelif.pc
 
 SUBDIRS = src/pixel_interface .
 noinst_LIBRARIES = libpixelif.a
@@ -47,27 +51,27 @@ libpixelif.a::
 	mv src/pixel_interface/libpixelif.a .
 
 install-dev:: libpixelif.a
-	mkdir -p $(fizmo_build_prefix)/lib/fizmo
-	mkdir -p $(fizmo_build_prefix)/include/fizmo/pixel_interface
+	mkdir -p $(DESTDIR)$(dev_prefix)/lib/fizmo
+	mkdir -p $(DESTDIR)$(dev_prefix)/include/fizmo/pixel_interface
 	cp src/pixel_interface/*.h \
-	  $(fizmo_build_prefix)/include/fizmo/pixel_interface
-	cp libpixelif.a $(fizmo_build_prefix)/lib/fizmo
+	  $(DESTDIR)$(dev_prefix)/include/fizmo/pixel_interface
+	cp libpixelif.a $(DESTDIR)$(dev_prefix)/lib/fizmo
 	cp src/screen_interface/screen_pixel_interface.h \
-	          "$(fizmo_build_prefix)"/include/fizmo/screen_interface
-	mkdir -p $(PKG_DIR)
-	echo 'prefix=$(fizmo_build_prefix)' >$(PKGFILE)
-	echo 'exec_prefix=$${prefix}' >>$(PKGFILE)
-	echo 'libdir=$${exec_prefix}/lib/fizmo' >>$(PKGFILE)
-	echo 'includedir=$${prefix}/include/fizmo' >>$(PKGFILE)
-	echo >>$(PKGFILE)
-	echo 'Name: libpixelif' >>$(PKGFILE)
-	echo 'Description: libpixelif' >>$(PKGFILE)
-	echo 'Version: 0.7.1' >>$(PKGFILE)
-	echo 'Requires: libfizmo >= 0.7.12, libdrilbo >= 0.2.8, $(LIBPIXELIF_REQS)' >>$(PKGFILE)
-	echo 'Requires.private:' >>$(PKGFILE)
-	echo 'Cflags: -I$(fizmo_build_prefix)/include/fizmo' >>$(PKGFILE)
-	echo 'Libs: -L$(fizmo_build_prefix)/lib/fizmo -lpixelif -ldrilbo' >>$(PKGFILE)
-	echo >>$(PKGFILE)
+	          "$(DESTDIR)$(dev_prefix)"/include/fizmo/screen_interface
+	mkdir -p $(pkg_dir)
+	echo 'prefix=$(dev_prefix)' >$(pkgfile)
+	echo 'exec_prefix=$${prefix}' >>$(pkgfile)
+	echo 'libdir=$${exec_prefix}/lib/fizmo' >>$(pkgfile)
+	echo 'includedir=$${prefix}/include/fizmo' >>$(pkgfile)
+	echo >>$(pkgfile)
+	echo 'Name: libpixelif' >>$(pkgfile)
+	echo 'Description: libpixelif' >>$(pkgfile)
+	echo 'Version: 0.7.2' >>$(pkgfile)
+	echo 'Requires: libfizmo >= 0.7.13, libdrilbo >= 0.2.9, $(LIBPIXELIF_REQS)' >>$(pkgfile)
+	echo 'Requires.private:' >>$(pkgfile)
+	echo 'Cflags: -I$(dev_prefix)/include/fizmo' >>$(pkgfile)
+	echo 'Libs: -L$(dev_prefix)/lib/fizmo -lpixelif -ldrilbo' >>$(pkgfile)
+	echo >>$(pkgfile)
 
 install-data-local:
 	mkdir -p "$(DESTDIR)$(localedir)"

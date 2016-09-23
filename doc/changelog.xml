@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <changelog>
+  <change version="0.7.2">
+    <logentry>Improved build system for separate library and interface builds.</logentry>
+  </change>
+
   <change version="0.7.1">
+    <datetime day-of-week="Wed" month="8" day="31" hour="22"
+      minute="39" second="42" timezone="CEST" year="2016"/>
     <logentry>Use tiny-xml-doc-tools for documentation.</logentry>
   </change>
 
