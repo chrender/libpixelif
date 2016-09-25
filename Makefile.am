@@ -56,6 +56,7 @@ install-dev:: libpixelif.a
 	cp src/pixel_interface/*.h \
 	  $(DESTDIR)$(dev_prefix)/include/fizmo/pixel_interface
 	cp libpixelif.a $(DESTDIR)$(dev_prefix)/lib/fizmo
+	mkdir -p $(DESTDIR)$(dev_prefix)/include/fizmo/screen_interface
 	cp src/screen_interface/screen_pixel_interface.h \
 	          "$(DESTDIR)$(dev_prefix)"/include/fizmo/screen_interface
 	mkdir -p $(pkg_dir)
