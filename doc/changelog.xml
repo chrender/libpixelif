@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <changelog>
   <change version="0.7.2">
+    <datetime day-of-week="Sub" month="10" day="9" hour="12"
+      minute="00" second="17" timezone="CEST" year="2016"/>
     <logentry>Improved build system for separate library and interface builds.</logentry>
   </change>
 
