@@ -16,14 +16,17 @@ Homepage: https://fizmo.spellbreaker.org/
 Package: libpixelif-common
 Architecture: all
 Depends: ${misc:Depends}
-Description: Provides localization data for libpixelif.
- This package is required by all packages which are utilizing libpixelif.
+Description: Provides localization and font data for libpixelif
+ This package is required by all packages which are using libpixelif. It's
+ usually not necessary to install this package manually.
 
 Package: libpixelif-dev
 Architecture: any
 Depends: libpixelif-common,
  ${shlibs:Depends},
  ${misc:Depends}
-Description: This interface translates raw Z-Machine output to pixels.
- This library transforms fizmo's raw Z-Machine output into pixel draw commands.
+Description: Interface translating fizmo output into pixel data
+ This library transforms fizmo's raw Z-Machine output into pixel-based
+ output operations. It greatly simplifies the implementation of a
+ GUI-based Z-Machine interpreter and is used by the fizmo-sdl2 frontend.
 
