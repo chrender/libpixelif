@@ -18,7 +18,8 @@ Architecture: all
 Depends: ${misc:Depends}
 Description: Provides localization and font data for libpixelif
  This package is required by all packages which are using libpixelif. It's
- usually not necessary to install this package manually.
+ usually not necessary to install this package manually and should be
+ normally installed as a dependency for another package.
 
 Package: libpixelif-dev
 Architecture: any

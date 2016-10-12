@@ -44,7 +44,7 @@ License: permissive
  provided the copyright notice and this notice are
  preserved.
 
-Files: src/fonts/*
+Files: fonts/*
 Copyright: 2013, Erik Spiekermann Ralph du Carrois
-License: SIL Open Font License
+License: OFL
 
