@@ -5,4 +5,3 @@
 override_dh_auto_install:
 	DESTDIR=$(CURDIR)/debian/libpixelif-common $(MAKE) install-data-local
 	DESTDIR=$(CURDIR)/debian/libpixelif-dev $(MAKE) install-dev
-

@@ -3,7 +3,6 @@ Section: libdevel
 Priority: extra
 Maintainer: Christoph Ender <christoph.ender@spellbreaker.org>
 Build-Depends: debhelper (>= 9.0.0),
- dpkg-dev (>= 1.16.1~),
  dh-autoreconf,
  automake,
  autoconf,
@@ -31,4 +30,3 @@ Description: Interface translating fizmo output into pixel data
  This library transforms fizmo's raw Z-Machine output into pixel-based
  output operations. It greatly simplifies the implementation of a
  GUI-based Z-Machine interpreter and is used by the fizmo-sdl2 frontend.
-
