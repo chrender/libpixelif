@@ -33,7 +33,7 @@
 #ifndef pixelscreen_h_INCLUDED
 #define pixelscreen_h_INCLUDED
 
-#define LIBPIXELINTERFACE_VERSION "0.7.2"
+#define LIBPIXELINTERFACE_VERSION "0.7.3"
 
 #include "../screen_interface/screen_pixel_interface.h"
 

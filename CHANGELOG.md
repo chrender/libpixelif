@@ -1,6 +1,15 @@
 
 
 
+   **Version 0.7.3**
+
+ - Fixed missing evaluation of events on start-up. This fixes
+      a bug that made the interpreter crash when you initial screen size
+      was less than the default size.
+
+---
+
+
    **Version 0.7.2 — October 9, 2016**
 
  - Improved build system for separate library and interface builds.
