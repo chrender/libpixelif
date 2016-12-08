@@ -4,6 +4,7 @@
    **Version 0.7.3**
 
  - Fixed missing evaluation of events on start-up. This fixes a bug that made the interpreter crash when your initial screen size was less than the default size. This fix does now also allow resizing the window during frontispiece display.
+ - Fixed build error which occured when "--disable-x11" was set for drilbo.
 
 ---
 

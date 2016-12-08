@@ -64,9 +64,6 @@
 #include "../locales/libpixelif_locales.h"
 
 #include <drilbo/drilbo.h>
-#include <drilbo/drilbo-jpeg.h>
-#include <drilbo/drilbo-png.h>
-#include <drilbo/drilbo-x11.h>
 
 
 
