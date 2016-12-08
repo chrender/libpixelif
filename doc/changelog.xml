@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <changelog>
+  <change version="0.7.3">
+    <logentry>Fixed missing evaluation of events on start-up. This fixes a bug that made the interpreter crash when your initial screen size was less than the default size. This fix does now also allow resizing the window during frontispiece display.</logentry>
+  </change>
+
   <change version="0.7.2">
     <datetime day-of-week="Sub" month="10" day="9" hour="12"
       minute="00" second="17" timezone="CEST" year="2016"/>
