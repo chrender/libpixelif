@@ -64,6 +64,9 @@
 #include "../locales/libpixelif_locales.h"
 
 #include <drilbo/drilbo.h>
+#include <drilbo/drilbo-jpeg.h>
+#include <drilbo/drilbo-png.h>
+#include <drilbo/drilbo-x11.h>
 
 
 
@@ -338,7 +341,7 @@ static void history_has_to_be_remeasured() {
 
 
 static void refresh_scrollbar() {
-  int bar_height, bar_position;
+  int bar_height, bar_position, total_pixels;
   int screen_height = screen_pixel_interface->get_screen_height_in_pixels();
   int left_width
     = screen_pixel_interface->get_screen_width_in_pixels() - scrollbar_width;
@@ -360,16 +363,31 @@ static void refresh_scrollbar() {
 
   if (history_is_being_remeasured == false) {
 
-    bar_height
-      = z_windows[0]->ysize
-      / (double)(total_lines_in_history * line_height)
-      * screen_height_in_pixel;
+    TRACE_LOG("bar_height #1:%d %d %d %d %d\n", bar_height,
+        z_windows[0]->ysize, total_lines_in_history, line_height,
+        screen_height_in_pixel);
+
+    total_pixels = total_lines_in_history * line_height;
+
+    if (total_pixels < screen_height_in_pixel) {
+      bar_height = screen_height_in_pixel;
+    }
+    else {
+      bar_height
+        = z_windows[0]->ysize
+        / (double)(total_lines_in_history * line_height)
+        * screen_height_in_pixel;
+    }
+    TRACE_LOG("bar_height #2:%d %d %d %d %d\n", bar_height,
+        z_windows[0]->ysize, total_lines_in_history, line_height,
+        screen_height_in_pixel);
 
     // bar_height may be < 0 in case we've got less output than
     // screen size.
     if (bar_height > screen_height) {
       bar_height = screen_height;
     }
+    TRACE_LOG("bar_height #3:%d\n", bar_height);
 
     TRACE_LOG("top_upscroll_line: %d.\n", top_upscroll_line);
     TRACE_LOG("z_windows[0]->ysize: %d, bar_height: %d.\n",
@@ -397,7 +415,7 @@ static void refresh_scrollbar() {
 
     TRACE_LOG("bar-fill: %d %d %d %d\n",
         left_width + 2,
-        bar_position - bar_height,
+        bar_position,
         scrollbar_width - 4,
         bar_height);
 
