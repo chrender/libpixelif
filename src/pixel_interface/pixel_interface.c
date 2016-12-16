@@ -3341,7 +3341,7 @@ static void refresh_screen_without_paragraph_attributes() {
 
   z_windows[0]->nof_consecutive_lines_output = 0;
 
-  //refresh_active = false;
+  refresh_active = false;
   disable_more_prompt = false;
 }
 
