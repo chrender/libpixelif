@@ -2034,6 +2034,21 @@ static void link_interface_to_story(struct z_story *story) {
     z_ucs_output(newline_string);
   }
 
+  // Process al resizing events which are queued, if, for example, the
+  // screen we're working on has a smaller size as the default screen size.
+  do {
+    if (event_code == EVENT_WAS_WINCH) {
+      TRACE_LOG("winch.\n");
+      new_pixel_screen_size(
+          screen_pixel_interface->get_screen_height_in_pixels(),
+          screen_pixel_interface->get_screen_width_in_pixels());
+      internal_erase_window(0, true);
+    }
+    screen_pixel_interface->update_screen();
+    event_code = get_next_event_wrapper(&input, 1);
+  }
+  while (event_code == EVENT_WAS_WINCH);
+ 
   frontispiece_resource_number
     = active_blorb_interface->get_frontispiece_resource_number(
         active_z_story->blorb_map);
