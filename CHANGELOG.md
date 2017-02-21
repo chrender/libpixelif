@@ -1,6 +1,13 @@
 
 
 
+   **Version 0.7.4**
+
+ - Adapted to replacement of en_US locale with en_GB from libfizmo.
+
+---
+
+
    **Version 0.7.3**
 
  - Fixed missing display of upper screen output on game start, like, for example, the title display of “Alpha“ or “Anchorhead”.
