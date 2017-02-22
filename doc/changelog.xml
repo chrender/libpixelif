@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <changelog>
+  <change version="0.8.3">
+    <logentry>Adapted to replacement of en_US locale with en_GB from libfizmo.</logentry>
+    <logentry>Raised version number into 0.8 range to comply with general version scheme for new modules.</logentry>
+  </change>
+
   <change version="0.7.3">
+    <logentry>Fixed missing display of upper screen output on game start, like, for example, the title display of “Alpha“ or “Anchorhead”.</logentry>
     <logentry>Fixed missing evaluation of events on start-up. This fixes a bug that made the interpreter crash when your initial screen size was less than the default size. This fix does now also allow resizing the window during frontispiece display.</logentry>
     <logentry>Fixed build error which occured when "--disable-x11" was set for drilbo.</logentry>
+    <logentry>Fixed drawing the scrollbar at invalid positions.</logentry>
   </change>
 
   <change version="0.7.2">

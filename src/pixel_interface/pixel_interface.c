@@ -3,7 +3,7 @@
  *
  * This file is part of fizmo.
  *
- * Copyright (c) 2011-2016 Christoph Ender.
+ * Copyright (c) 2011-2017 Christoph Ender.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -64,6 +64,9 @@
 #include "../locales/libpixelif_locales.h"
 
 #include <drilbo/drilbo.h>
+#include <drilbo/drilbo-jpeg.h>
+#include <drilbo/drilbo-png.h>
+#include <drilbo/drilbo-x11.h>
 
 
 
@@ -149,6 +152,7 @@ static int active_z_window_id = -1;
 //static int refresh_lines_to_skip;
 //static int refresh_lines_to_output;
 static int last_split_window_size = 0;
+static int top_win0_y_cursorpos_after_split = 0;
 static bool winch_found = false;
 static bool interface_open = false;
 static bool italic_font_available;
@@ -338,7 +342,7 @@ static void history_has_to_be_remeasured() {
 
 
 static void refresh_scrollbar() {
-  int bar_height, bar_position;
+  int bar_height, bar_position, total_pixels;
   int screen_height = screen_pixel_interface->get_screen_height_in_pixels();
   int left_width
     = screen_pixel_interface->get_screen_width_in_pixels() - scrollbar_width;
@@ -360,16 +364,33 @@ static void refresh_scrollbar() {
 
   if (history_is_being_remeasured == false) {
 
-    bar_height
-      = z_windows[0]->ysize
-      / (double)(total_lines_in_history * line_height)
-      * screen_height_in_pixel;
+    /*
+    TRACE_LOG("bar_height #1:%d %d %d %d %d\n", bar_height,
+        z_windows[0]->ysize, total_lines_in_history, line_height,
+        screen_height_in_pixel);
+    */
+
+    total_pixels = total_lines_in_history * line_height;
+
+    if (total_pixels < screen_height_in_pixel) {
+      bar_height = screen_height_in_pixel;
+    }
+    else {
+      bar_height
+        = z_windows[0]->ysize
+        / (double)(total_lines_in_history * line_height)
+        * screen_height_in_pixel;
+    }
+    TRACE_LOG("bar_height #2:%d %d %d %d %d\n", bar_height,
+        z_windows[0]->ysize, total_lines_in_history, line_height,
+        screen_height_in_pixel);
 
     // bar_height may be < 0 in case we've got less output than
     // screen size.
     if (bar_height > screen_height) {
       bar_height = screen_height;
     }
+    TRACE_LOG("bar_height #3:%d\n", bar_height);
 
     TRACE_LOG("top_upscroll_line: %d.\n", top_upscroll_line);
     TRACE_LOG("z_windows[0]->ysize: %d, bar_height: %d.\n",
@@ -397,7 +418,7 @@ static void refresh_scrollbar() {
 
     TRACE_LOG("bar-fill: %d %d %d %d\n",
         left_width + 2,
-        bar_position - bar_height,
+        bar_position,
         scrollbar_width - 4,
         bar_height);
 
@@ -648,7 +669,7 @@ static void reset_xcursorpos(int window_id) {
 // Will return true in case break_line was successful and the cursor is now
 // on a fresh line, false otherwise (if, for example, scrolling is disabled
 // and the cursor is on the bottom-right position of the window).
-static bool break_line(int window_number) {
+static bool break_line(int window_number, bool ignore_yspace) {
   z_ucs input;
   int event_type;
   int yspace_in_pixels, nof_lines_to_scroll, i, fill_ypos, fill_height;
@@ -688,7 +709,7 @@ static bool break_line(int window_number) {
     printf("yspace_in_pixels:%d, line_height: %d.\n",
         yspace_in_pixels, line_height);
     */
-    if (yspace_in_pixels >= line_height) {
+    if ( (ignore_yspace == true) || (yspace_in_pixels >= line_height) )  {
       z_windows[window_number]->ycursorpos += line_height;
       reset_xcursorpos(window_number);
     }
@@ -961,7 +982,7 @@ static int process_glyph(z_ucs charcode, int window_number,
   }
 
   if (charcode == Z_UCS_NEWLINE) {
-    if (break_line(window_number) == false) {
+    if (break_line(window_number, false) == false) {
       if (no_more_space != NULL)
         *no_more_space = true;
     }
@@ -1024,7 +1045,7 @@ static int process_glyph(z_ucs charcode, int window_number,
       > z_windows[window_number]->xsize
       - z_windows[window_number]->rightmargin) {
     TRACE_LOG("Breaking line at %d.\n", z_windows[window_number]->xcursorpos);
-    if (break_line(window_number) == false) {
+    if (break_line(window_number, false) == false) {
       if (no_more_space != NULL) {
         *no_more_space = true;
       }
@@ -1045,6 +1066,10 @@ static int process_glyph(z_ucs charcode, int window_number,
 
     y = z_windows[window_number]->ypos
       + z_windows[window_number]->ycursorpos;
+
+    if ( (window_number == 0) && (y < top_win0_y_cursorpos_after_split) ) {
+      top_win0_y_cursorpos_after_split = y;
+    }
 
     TRACE_LOG("Drawing glyph %c / %d at %d, %d.\n",
         charcode, charcode, x, y);
@@ -1611,7 +1636,7 @@ static void update_fixed_width_char_width() {
 }
 
 
-static void erase_window(int16_t window_number) {
+static void internal_erase_window(int16_t window_number, bool keep_top_win0_y_cursorpos_after_split) {
   z_rgb_colour background_colour;
 
   TRACE_LOG("winsize: %d x %d.\n",
@@ -1655,7 +1680,16 @@ static void erase_window(int16_t window_number) {
       = (ver >= 5 ? 0 : (z_windows[window_number]->ysize - line_height));
 
     z_windows[window_number]->nof_consecutive_lines_output = 0;
+
+    if ( (keep_top_win0_y_cursorpos_after_split == false) && (window_number == 0) ) {
+      top_win0_y_cursorpos_after_split = 0;
+    }
   }
+}
+
+
+static void erase_window(int16_t window_number) {
+  internal_erase_window(window_number, false);
 }
 
 
@@ -1932,7 +1966,7 @@ static void link_interface_to_story(struct z_story *story) {
 
     reset_xcursorpos(i);
 
-    erase_window(i);
+    internal_erase_window(i, true);
   }
 
   z_windows[measurement_window_id]
@@ -2000,6 +2034,21 @@ static void link_interface_to_story(struct z_story *story) {
     z_ucs_output(newline_string);
   }
 
+  // Process al resizing events which are queued, if, for example, the
+  // screen we're working on has a smaller size as the default screen size.
+  do {
+    if (event_code == EVENT_WAS_WINCH) {
+      TRACE_LOG("winch.\n");
+      new_pixel_screen_size(
+          screen_pixel_interface->get_screen_height_in_pixels(),
+          screen_pixel_interface->get_screen_width_in_pixels());
+      internal_erase_window(0, true);
+    }
+    screen_pixel_interface->update_screen();
+    event_code = get_next_event_wrapper(&input, 1);
+  }
+  while (event_code == EVENT_WAS_WINCH);
+ 
   frontispiece_resource_number
     = active_blorb_interface->get_frontispiece_resource_number(
         active_z_story->blorb_map);
@@ -2016,7 +2065,7 @@ static void link_interface_to_story(struct z_story *story) {
             new_pixel_screen_size(
                 screen_pixel_interface->get_screen_height_in_pixels(),
                 screen_pixel_interface->get_screen_width_in_pixels());
-            erase_window(0);
+            internal_erase_window(0, true);
           }
 
           //printf("%d x %d\n",
@@ -2092,7 +2141,7 @@ static void link_interface_to_story(struct z_story *story) {
         }
         while (event_code == EVENT_WAS_WINCH);
 
-        erase_window(0);
+        internal_erase_window(0, true);
       }
 
       free_zimage(frontispiece);
@@ -2257,9 +2306,11 @@ static void split_window(int16_t nof_lines) {
       }
     }
 
-    //printf("upper-y-size: %d.\n", z_windows[1]->ysize);
-
     last_split_window_size = nof_lines;
+
+    if (nof_pixels > top_win0_y_cursorpos_after_split) {
+      top_win0_y_cursorpos_after_split = nof_pixels;
+    }
   }
 }
 
@@ -2617,7 +2668,7 @@ static void show_status(z_ucs *room_description, int status_line_mode,
   if (statusline_window_id > 0) {
     last_active_z_window_id = active_z_window_id;
     switch_to_window(statusline_window_id);
-    erase_window(statusline_window_id);
+    internal_erase_window(statusline_window_id, true);
 
     z_windows[statusline_window_id]->ycursorpos = 0;
     reset_xcursorpos(statusline_window_id);
@@ -2742,7 +2793,9 @@ static void refresh_upper_window() {
   struct blockbuf_char *current_char;
   int last_glyphpos_buf, rightmost_buf;
 
-  if (last_split_window_size > 0) {
+  TRACE_LOG("Start upper window refresh.\n");
+
+  if (top_win0_y_cursorpos_after_split > 0) {
     style_buf = z_windows[1]->output_text_style;
     foreground_buf = z_windows[1]->output_foreground_colour;
     background_buf = z_windows[1]->output_background_colour;
@@ -2757,7 +2810,7 @@ static void refresh_upper_window() {
     current_background = upper_window_buffer->content[0].background_colour;
     x_width = get_screen_width_in_characters();
 
-    erase_window(1);
+    internal_erase_window(1, true);
 
     z_windows[1]->output_text_style = current_style;
     z_windows[1]->output_foreground_colour = current_foreground;
@@ -2768,16 +2821,14 @@ static void refresh_upper_window() {
         current_style, current_foreground, current_background);
     */
 
-    for (y=0; y<last_split_window_size; y++) {
+    for (y=0; y<(top_win0_y_cursorpos_after_split/line_height); y++) {
       if (y > 0) {
-        break_line(1);
+        break_line(1, true);
       }
       for (x=0; x<x_width; x++) {
-        /*
-        printf("x, y, fg, bg: %d, %d, %d, %d.\n", x, y,
+        TRACE_LOG("x, y, fg, bg: %d, %d, %d, %d.\n", x, y,
             z_windows[1]->output_foreground_colour,
             z_windows[1]->output_background_colour);
-        */
         current_char
           = upper_window_buffer->content + upper_window_buffer->width*y + x;
 
@@ -2798,6 +2849,9 @@ static void refresh_upper_window() {
           //printf("new-bb-style: %d\n", current_style);
         }
 
+        TRACE_LOG("x/y: %d/%d: %c\n", x, y,
+            upper_window_buffer->content[upper_window_buffer->width*y + x].character);
+
         process_glyph(
             upper_window_buffer->content[
             upper_window_buffer->width*y + x].character,
@@ -2816,6 +2870,7 @@ static void refresh_upper_window() {
     z_windows[1]->output_text_style = style_buf;
     update_window_true_type_font(1);
   }
+  TRACE_LOG("Finished upper window refresh.\n");
 }
 
 
@@ -3047,7 +3102,7 @@ static void refresh_screen_with_paragraph_attributes() {
 
   TRACE_LOG("Refreshing screen, size: %d*%d.\n",
       total_screen_width_in_pixel, screen_height_in_pixel);
-  erase_window(0);
+  internal_erase_window(0, true);
 
   finish_history_remeasurement();
   disable_more_prompt = true;
@@ -3179,7 +3234,7 @@ static void refresh_screen_without_paragraph_attributes() {
   TRACE_LOG("Refreshing screen, size: %d*%d.\n",
       total_screen_width_in_pixel, screen_height_in_pixel);
   //screen_pixel_interface->set_text_style(0);
-  erase_window(0);
+  internal_erase_window(0, true);
 
   if ((history = init_history_output(
           outputhistory[0],
@@ -3301,7 +3356,7 @@ static void refresh_screen_without_paragraph_attributes() {
 
   z_windows[0]->nof_consecutive_lines_output = 0;
 
-  //refresh_active = false;
+  refresh_active = false;
   disable_more_prompt = false;
 }
 
