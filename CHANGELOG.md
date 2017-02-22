@@ -1,9 +1,10 @@
 
 
 
-   **Version 0.7.4**
+   **Version 0.8.3**
 
  - Adapted to replacement of en_US locale with en_GB from libfizmo.
+ - Raised version number into 0.8 range to comply with general version scheme for new modules.
 
 ---
 

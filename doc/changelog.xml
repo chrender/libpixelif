@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <changelog>
-  <change version="0.7.4">
+  <change version="0.8.3">
     <logentry>Adapted to replacement of en_US locale with en_GB from libfizmo.</logentry>
+    <logentry>Raised version number into 0.8 range to comply with general version scheme for new modules.</logentry>
   </change>
 
   <change version="0.7.3">
