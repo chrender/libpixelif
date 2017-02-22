@@ -1,4 +1,19 @@
 
+   Version 0.8.3
+ - Adapted to replacement of en_US locale with en_GB from libfizmo.
+ - Raised version number into 0.8 range to comply with general version scheme
+   for new modules.
+
+   Version 0.7.3
+ - Fixed missing display of upper screen output on game start, like, for
+   example, the title display of "Alpha" or "Anchorhead".
+ - Fixed missing evaluation of events on start-up. This fixes a bug that made
+   the interpreter crash when your initial screen size was less than the
+   default size. This fix does now also allow resizing the window during
+   frontispiece display.
+ - Fixed build error which occured when "--disable-x11" was set for drilbo.
+ - Fixed drawing the scrollbar at invalid positions.
+
    Version 0.7.2 -- October 9, 2016
  - Improved build system for separate library and interface builds.
 
