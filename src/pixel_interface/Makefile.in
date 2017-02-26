@@ -296,7 +296,7 @@ AUTOMAKE_OPTIONS = subdir-objects
 
 # Path elements are seperated by colons.
 #AM_CFLAGS += -DFONT_DEFAULT_SEARCH_PATH=\"$(fontdir):.\"
-AM_CFLAGS = $(libfizmo_CFLAGS) $(freetype2_CFLAGS) \
+AM_CFLAGS = $(libfizmo_CFLAGS) $(freetype2_CFLAGS) -fPIC \
 	-DFONT_DEFAULT_SEARCH_PATH=\"$(fontdir)\" $(am__append_1) \
 	$(libdrilbo_CFLAGS)
 AM_CPPFLAGS = 
