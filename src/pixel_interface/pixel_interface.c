@@ -2034,7 +2034,7 @@ static void link_interface_to_story(struct z_story *story) {
     z_ucs_output(newline_string);
   }
 
-  // Process al resizing events which are queued, if, for example, the
+  // Process all resizing events which are queued, if, for example, the
   // screen we're working on has a smaller size as the default screen size.
   do {
     if (event_code == EVENT_WAS_WINCH) {
@@ -3754,8 +3754,7 @@ static int16_t read_line(zscii *dest, uint16_t maximum_length,
           z_windows[0]->xcursorpos = *current_input_x - z_windows[0]->xpos
             - z_windows[0]->leftmargin;
           z_windows[0]->last_gylphs_xcursorpos = -1;
-          z_windows[0]->rightmost_filled_xpos
-            = z_windows[0]->xcursorpos;
+          z_windows[0]->rightmost_filled_xpos = input_rightmost_x;
           z_windows[0]->ycursorpos = *current_input_y - z_windows[0]->ypos;
           process_glyph_string(input_buffer, 0, regular_font, NULL);
 
