@@ -5,6 +5,7 @@
 
  - Adapted to replacement of en_US locale with en_GB from libfizmo.
  - Fixed missing opening screen and disappearing prompt during timed input in “eliza.z5”. Thanks to Stephen Gutknecht for reporting the problem.
+ - Fixed overlong reverse chars. This corrects several ASCII art problems as in Photopia, Nameless and ZChess, as well as in several opening screens. Thanks to Stephen Gutknecht.
  - Raised version number into 0.8 range to comply with general version scheme for new modules.
 
 ---
