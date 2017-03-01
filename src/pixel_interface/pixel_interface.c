@@ -170,7 +170,7 @@ static int line_height;
 static int fixed_width_char_width = 8;
 static true_type_wordwrapper *preloaded_wordwrapper;
 static int scrollbar_width = 12;
-static z_rgb_colour pixel_cursor_colour = Z_COLOUR_BLUE;
+static z_colour pixel_cursor_colour = Z_COLOUR_BLUE;
 
 // Scrolling upwards:
 // It is always assumed that there's no output to window[0] and it's

@@ -188,7 +188,7 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
   FT_Bitmap bitmap;
   //FT_Vector kerning;
   //int ft_error,
-  int left_reverse_x, reverse_width;
+  int pixel_bitmap_width, left_reverse_x, reverse_width;
   int screen_x, screen_y, advance, start_x, bitmap_x, bitmap_y;
   uint8_t pixel;
   uint8_t pixel2, pixel3;
@@ -198,6 +198,7 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
   uint8_t br, bg, bb; // pre-evaluated background colors
   int draw_width, bitmap_start_y, top_space, max_y;
   int number_of_rows_available;
+
 
   FT_UInt glyph_index = FT_Get_Char_Index(font->face, charcode);
 
@@ -217,7 +218,12 @@ int tt_draw_glyph(true_type_font *font, int x, int y, int x_max,
   slot = font->face->glyph;
   bitmap = slot->bitmap;
   advance = slot->advance.x / 64;
-  draw_width = advance > bitmap.width ? advance : bitmap.width;
+
+  pixel_bitmap_width
+    = bitmap.pixel_mode == FT_PIXEL_MODE_LCD
+    ? bitmap.width / 3 : bitmap.width;
+
+  draw_width = advance > pixel_bitmap_width ? advance : pixel_bitmap_width;
 
   if (clip_top < 0) {
     clip_top = 0;
