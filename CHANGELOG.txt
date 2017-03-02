@@ -6,6 +6,9 @@
  - Fixed overlong reverse chars. This corrects several ASCII art problems as
    in Photopia, Nameless and ZChess, as well as in several opening screens.
    Thanks to Stephen Gutknecht.
+ - Fixed incomplete flush function in true_type_wordwrapper.c. This corrects
+   the incorrect display of the startup-screens in "AtWork.z5" and
+   "Photopia". Thanks to Stephen Gutknecht for reporting the problem.
  - Raised version number into 0.8 range to comply with general version scheme
    for new modules.
 

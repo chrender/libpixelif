@@ -216,9 +216,9 @@ void flush_line(true_type_wordwrapper *wrapper, long flush_index,
     TRACE_LOG("mdoutput: mdindex: %d, flushindex: %d, output_index:%d\n",
         output_metadata_index, flush_index, output_index);
 
-    // In case it's behind the current flush position, there's nothing
-    // more to do.
-    if (output_metadata_index > flush_index) {
+    // In case we're not flushing everything and the next buffer position is
+    // behind the current flush position, there's nothing more to do.
+    if ( (flush_index >= 0) && (output_metadata_index > flush_index) ) {
      break;
     }
 
