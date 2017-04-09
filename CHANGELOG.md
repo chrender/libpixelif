@@ -1,7 +1,7 @@
 
 
 
-   **Version 0.8.3**
+   **Version 0.8.3 — April 9, 2017**
 
  - Adapted to replacement of en_US locale with en_GB from libfizmo.
  - Fixed missing opening screen and disappearing prompt during timed input in “eliza.z5”. Thanks to Stephen Gutknecht for reporting the problem.
