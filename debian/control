@@ -11,12 +11,13 @@ Build-Depends: debhelper (>= 9.0.0),
  libfreetype6-dev,
  libfizmo-dev,
  libdrilbo-dev
-Standards-Version: 3.9.8
+Standards-Version: 4.0.0.4
 Homepage: https://fizmo.spellbreaker.org/
 
 Package: libpixelif-common
 Architecture: all
-Depends: ${misc:Depends}
+Depends: fonts-noto,
+ ${misc:Depends}
 Description: Provides localization and font data for libpixelif
  This package is required by all packages which are using libpixelif. It's
  usually not necessary to install this package manually and should be
