@@ -1,6 +1,14 @@
 
 
 
+   **Version 0.8.4**
+
+ - Fix superfluous libraries and includes during install when using $DESTDIR, addressing github issue #21.
+ - Add missing “clean-dev” target.
+
+---
+
+
    **Version 0.8.3 — April 9, 2017**
 
  - Adapted to replacement of en_US locale with en_GB from libfizmo.
