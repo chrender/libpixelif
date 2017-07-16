@@ -1,3 +1,11 @@
+libpixelif (0.8.3-3) unstable; urgency=low
+
+  * Switch to unstable.
+  * Fix standards version from 4.0.0.4 to 4.0.0.
+
+ -- Christoph Ender <christoph.ender@spellbreaker.org>  Sun, 16 Jul 2017 21:45:00 +0200
+
+
 libpixelif (0.8.3-2) experimental; urgency=low
 
   * Replace non-distributable packaged fonts with debian-included noto
