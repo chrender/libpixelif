@@ -37,10 +37,10 @@ fontdir = $(datarootdir)/fizmo/fonts
 if FIZMO_DIST_BUILD
   dev_prefix=$(FIZMO_DIST_BUILD_PREFIX)
 else
-  dev_prefix=$(prefix)
+  dev_prefix=$(DESTDIR)/$(prefix)
 endif
 
-pkg_dir = $(DESTDIR)$(dev_prefix)/lib/pkgconfig
+pkg_dir = $(dev_prefix)/lib/pkgconfig
 pkgfile = $(pkg_dir)/libpixelif.pc
 
 SUBDIRS = src/pixel_interface .
@@ -51,14 +51,14 @@ libpixelif.a::
 	mv src/pixel_interface/libpixelif.a .
 
 install-dev:: libpixelif.a
-	mkdir -p $(DESTDIR)$(dev_prefix)/lib/fizmo
-	mkdir -p $(DESTDIR)$(dev_prefix)/include/fizmo/pixel_interface
+	mkdir -p $(dev_prefix)/lib/fizmo
+	mkdir -p $(dev_prefix)/include/fizmo/pixel_interface
 	cp src/pixel_interface/*.h \
-	  $(DESTDIR)$(dev_prefix)/include/fizmo/pixel_interface
-	cp libpixelif.a $(DESTDIR)$(dev_prefix)/lib/fizmo
-	mkdir -p $(DESTDIR)$(dev_prefix)/include/fizmo/screen_interface
+	  $(dev_prefix)/include/fizmo/pixel_interface
+	cp libpixelif.a $(dev_prefix)/lib/fizmo
+	mkdir -p $(dev_prefix)/include/fizmo/screen_interface
 	cp src/screen_interface/screen_pixel_interface.h \
-	          "$(DESTDIR)$(dev_prefix)"/include/fizmo/screen_interface
+	  "$(dev_prefix)"/include/fizmo/screen_interface
 	mkdir -p $(pkg_dir)
 	echo 'prefix=$(dev_prefix)' >$(pkgfile)
 	echo 'exec_prefix=$${prefix}' >>$(pkgfile)
@@ -67,8 +67,8 @@ install-dev:: libpixelif.a
 	echo >>$(pkgfile)
 	echo 'Name: libpixelif' >>$(pkgfile)
 	echo 'Description: libpixelif' >>$(pkgfile)
-	echo 'Version: 0.8.3' >>$(pkgfile)
-	echo 'Requires: libfizmo >= 0.7.14, libdrilbo >= 0.2.10, $(LIBPIXELIF_REQS)' >>$(pkgfile)
+	echo 'Version: 0.8.4' >>$(pkgfile)
+	echo 'Requires: libfizmo >= 0.7.15, libdrilbo >= 0.2.11, $(LIBPIXELIF_REQS)' >>$(pkgfile)
 	echo 'Requires.private:' >>$(pkgfile)
 	echo 'Cflags: -I$(dev_prefix)/include/fizmo' >>$(pkgfile)
 	echo 'Libs: -L$(dev_prefix)/lib/fizmo -lpixelif -ldrilbo' >>$(pkgfile)
@@ -83,4 +83,16 @@ install-data-local:
         done
 	mkdir -p $(DESTDIR)$(fontdir)
 	cp -r fonts/* $(DESTDIR)$(fontdir)
+
+# About "-rmdir": make ignores errors of commands which are prefixed with
+# a - sign. rmdir may fail in clean-dev in case other libs have installed
+# development files, or in case clean-dev has been run before.
+clean-dev::
+	-rm "$(dev_prefix)/lib/fizmo/libpixelif.a"
+	-rmdir "$(dev_prefix)/lib/fizmo"
+	rm -rf "$(dev_prefix)/include/fizmo/pixel_interface"
+	-rm "$(dev_prefix)/include/fizmo/screen_interface/screen_pixel_interface.h"
+	-rmdir "$(dev_prefix)/include/fizmo/screen_interface"
+	-rmdir "$(dev_prefix)/include/fizmo"
+	-rm "$(pkgfile)"
 

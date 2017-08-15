@@ -1334,7 +1334,7 @@ static bool is_picture_font_availiable() {
 }
 
 
-static uint8_t get_screen_height_in_lines() {
+static uint16_t get_screen_height_in_lines() {
   /*
   printf("height: %d\n", screen_height_in_pixel / line_height);
   if (screen_height_in_pixel < 0)
@@ -1345,7 +1345,7 @@ static uint8_t get_screen_height_in_lines() {
 }
 
 
-static uint8_t get_screen_width_in_characters() {
+static uint16_t get_screen_width_in_characters() {
   /*
   printf("width in chars (%d, %d): %d\n",
       custom_left_margin, custom_right_margin,
@@ -1356,13 +1356,13 @@ static uint8_t get_screen_width_in_characters() {
 }
 
 
-static uint8_t get_screen_height_in_units() {
+static uint16_t get_screen_height_in_units() {
   //return screen_height_in_pixel;
   return get_screen_height_in_lines();
 }
 
 
-static uint8_t get_screen_width_in_units() {
+static uint16_t get_screen_width_in_units() {
   //return screen_width_in_pixel;
   return get_screen_width_in_characters();
 }
