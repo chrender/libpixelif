@@ -7,7 +7,6 @@ Build-Depends: debhelper (>= 9.0.0),
  automake,
  autoconf,
  pkg-config,
- libsdl2-dev,
  libfreetype6-dev,
  libfizmo-dev,
  libdrilbo-dev
@@ -26,6 +25,7 @@ Description: Provides localization and font data for libpixelif
 Package: libpixelif-dev
 Architecture: any
 Depends: libpixelif-common,
+ libfreetype6-dev,
  ${shlibs:Depends},
  ${misc:Depends}
 Description: Interface translating fizmo output into pixel data
