@@ -1,0 +1,73 @@
+Replace distribution Fira fonts with Google Noto fonts.
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -83,8 +83,6 @@
+           mkdir -p "$(DESTDIR)$(localedir)/$$l" ; \
+           cp src/locales/$$l/*.txt "$(DESTDIR)$(localedir)/$$l" ; \
+         done
+-	mkdir -p $(DESTDIR)$(fontdir)
+-	cp -r fonts/* $(DESTDIR)$(fontdir)
+ 
+ # About "-rmdir": make ignores errors of commands which are prefixed with
+ # a - sign. rmdir may fail in clean-dev in case other libs have installed
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -883,8 +883,6 @@
+           mkdir -p "$(DESTDIR)$(localedir)/$$l" ; \
+           cp src/locales/$$l/*.txt "$(DESTDIR)$(localedir)/$$l" ; \
+         done
+-	mkdir -p $(DESTDIR)$(fontdir)
+-	cp -r fonts/* $(DESTDIR)$(fontdir)
+ 
+ # About "-rmdir": make ignores errors of commands which are prefixed with
+ # a - sign. rmdir may fail in clean-dev in case other libs have installed
+--- a/src/pixel_interface/Makefile.am
++++ b/src/pixel_interface/Makefile.am
+@@ -40,7 +40,7 @@
+ 
+ # Path elements are seperated by colons.
+ #AM_CFLAGS += -DFONT_DEFAULT_SEARCH_PATH=\"$(fontdir):.\"
+-AM_CFLAGS += -DFONT_DEFAULT_SEARCH_PATH=\"$(fontdir)\"
++AM_CFLAGS += -DFONT_DEFAULT_SEARCH_PATH=\"/usr/share/fonts\"
+ 
+ noinst_LIBRARIES = libpixelif.a
+ libpixelif_a_SOURCES = ../locales/libpixelif_locales.c pixel_interface.c \
+--- a/src/pixel_interface/Makefile.in
++++ b/src/pixel_interface/Makefile.in
+@@ -298,8 +298,8 @@
+ # Path elements are seperated by colons.
+ #AM_CFLAGS += -DFONT_DEFAULT_SEARCH_PATH=\"$(fontdir):.\"
+ AM_CFLAGS = $(libfizmo_CFLAGS) $(freetype2_CFLAGS) -fPIC \
+-	-DFONT_DEFAULT_SEARCH_PATH=\"$(fontdir)\" $(am__append_1) \
+-	$(libdrilbo_CFLAGS)
++	-DFONT_DEFAULT_SEARCH_PATH=\"/usr/share/fonts\" \
++	$(am__append_1) $(libdrilbo_CFLAGS)
+ AM_CPPFLAGS = 
+ LDADD = $(libfizmo_LIBS) $(freetype2_LIBS) $(libdrilbo_LIBS)
+ fontdir = $(datarootdir)/fizmo/fonts
+--- a/src/pixel_interface/pixel_interface.c
++++ b/src/pixel_interface/pixel_interface.c
+@@ -1726,15 +1726,15 @@
+   font_factory = create_true_type_factory(font_search_path);
+ 
+   if (regular_font_filename == NULL) {
+-    set_configuration_value("regular-font", "FiraSans-Regular.ttf");
+-    set_configuration_value("italic-font", "FiraSans-RegularItalic.ttf");
+-    set_configuration_value("bold-font", "FiraSans-Medium.ttf");
+-    set_configuration_value("bold-italic-font", "FiraSans-MediumItalic.ttf");
++    set_configuration_value("regular-font", "NotoSans-Regular.ttf");
++    set_configuration_value("italic-font", "NotoSans-Italic.ttf");
++    set_configuration_value("bold-font", "NotoSans-Bold.ttf");
++    set_configuration_value("bold-italic-font", "NotoSans-BoldItalic.ttf");
+ 
+-    set_configuration_value("fixed-regular-font", "FiraMono-Regular.ttf");
+-    set_configuration_value("fixed-italic-font", "FiraMono-Regular.ttf");
+-    set_configuration_value("fixed-bold-font", "FiraMono-Bold.ttf");
+-    set_configuration_value("fixed-bold-italic-font", "FiraMono-Bold.ttf");
++    set_configuration_value("fixed-regular-font", "NotoMono-Regular.ttf");
++    set_configuration_value("fixed-italic-font", "NotoMono-Regular.ttf");
++    set_configuration_value("fixed-bold-font", "NotoMono-Regular.ttf");
++    set_configuration_value("fixed-bold-italic-font", "NotoMono-Regular.ttf");
+   }
+ 
+   scrollbar_width *= screen_pixel_interface->get_device_to_pixel_ratio();
