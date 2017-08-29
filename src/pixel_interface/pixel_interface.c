@@ -2654,8 +2654,8 @@ static void show_status(z_ucs *room_description, int status_line_mode,
   static z_ucs *rightside_buf_zucs = NULL;
   //z_ucs buf = 0;
   z_ucs *ptr;
-  static char latin1_buf1[8];
-  static char latin1_buf2[8];
+  static char latin1_buf1[14];
+  static char latin1_buf2[9];
   int last_active_z_window_id;
 
   TRACE_LOG("statusline: \"");
