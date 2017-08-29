@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document>
+  <section>
+    <p>This package includes the “Fira Sans” and “Fira Mono” fonts made by Erik Spiekermann and Ralph du Carrois. For information about copyright and licensing see the file <tt>SIL Open Font License.txt</tt> in the following directories:
+      <ul>
+        <li>libpixelif/fonts/fira-mono</li>
+        <li>libpixelif/fonts/fira-sans</li>
+      </ul>
+    </p>
+  </section>
+</document>
+
