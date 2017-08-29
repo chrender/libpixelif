@@ -36,8 +36,10 @@ fontdir = $(datarootdir)/fizmo/fonts
 
 if FIZMO_DIST_BUILD
   dev_prefix=$(FIZMO_DIST_BUILD_PREFIX)
+  pkg_prefix=$(FIZMO_DIST_BUILD_PREFIX)
 else
   dev_prefix=$(DESTDIR)/$(prefix)
+  pkg_prefix=$(prefix)
 endif
 
 pkg_dir = $(dev_prefix)/lib/pkgconfig
@@ -60,7 +62,7 @@ install-dev:: libpixelif.a
 	cp src/screen_interface/screen_pixel_interface.h \
 	  "$(dev_prefix)"/include/fizmo/screen_interface
 	mkdir -p $(pkg_dir)
-	echo 'prefix=$(dev_prefix)' >$(pkgfile)
+	echo 'prefix=$(pkg_prefix)' >$(pkgfile)
 	echo 'exec_prefix=$${prefix}' >>$(pkgfile)
 	echo 'libdir=$${exec_prefix}/lib/fizmo' >>$(pkgfile)
 	echo 'includedir=$${prefix}/include/fizmo' >>$(pkgfile)
@@ -70,8 +72,8 @@ install-dev:: libpixelif.a
 	echo 'Version: 0.8.4' >>$(pkgfile)
 	echo 'Requires: libfizmo >= 0.7.15, libdrilbo >= 0.2.11, $(LIBPIXELIF_REQS)' >>$(pkgfile)
 	echo 'Requires.private:' >>$(pkgfile)
-	echo 'Cflags: -I$(dev_prefix)/include/fizmo' >>$(pkgfile)
-	echo 'Libs: -L$(dev_prefix)/lib/fizmo -lpixelif -ldrilbo' >>$(pkgfile)
+	echo 'Cflags: -I$(pkg_prefix)/include/fizmo' >>$(pkgfile)
+	echo 'Libs: -L$(pkg_prefix)/lib/fizmo -lpixelif -ldrilbo' >>$(pkgfile)
 	echo >>$(pkgfile)
 
 install-data-local:
