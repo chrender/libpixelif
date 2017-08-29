@@ -4,7 +4,7 @@ libpixelif (0.8.4-1) unstable; urgency=low
   * Updated BSD-3 license to include contributors. License is now to 100%
     identical to the 3-Clause BSD License.
 
- -- Christoph Ender <christoph.ender@spellbreaker.org>  Mon, 29 Aug 2017 22:50:00 +0200
+ -- Christoph Ender <christoph.ender@spellbreaker.org>  Mon, 28 Aug 2017 22:50:00 +0200
 
 
 libpixelif (0.8.3-3) unstable; urgency=low
