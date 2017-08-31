@@ -31,9 +31,9 @@
 
 AUTOMAKE_OPTIONS = subdir-objects
 
-AM_CFLAGS = $(libfizmo_CFLAGS) $(freetype2_CFLAGS) -fPIC
+AM_CFLAGS = $(libfizmo_CFLAGS) $(libfreetype2_CFLAGS) -fPIC
 AM_CPPFLAGS =
-LDADD = $(libfizmo_LIBS) $(freetype2_LIBS)
+LDADD = $(libfizmo_LIBS) $(flibreetype2_LIBS)
 
 localedir = $(datarootdir)/fizmo/locales
 fontdir = $(datarootdir)/fizmo/fonts
