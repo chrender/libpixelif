@@ -220,6 +220,8 @@ INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LDFLAGS = @LDFLAGS@
+LIBFREETYPE2_NONPKG_CFLAGS = @LIBFREETYPE2_NONPKG_CFLAGS@
+LIBFREETYPE2_NONPKG_LIBS = @LIBFREETYPE2_NONPKG_LIBS@
 LIBOBJS = @LIBOBJS@
 LIBPIXELIF_REQS = @LIBPIXELIF_REQS@
 LIBS = @LIBS@
@@ -262,8 +264,6 @@ datarootdir = @datarootdir@
 docdir = @docdir@
 dvidir = @dvidir@
 exec_prefix = @exec_prefix@
-freetype2_CFLAGS = @freetype2_CFLAGS@
-freetype2_LIBS = @freetype2_LIBS@
 host_alias = @host_alias@
 htmldir = @htmldir@
 includedir = @includedir@
@@ -275,6 +275,8 @@ libdrilbo_LIBS = @libdrilbo_LIBS@
 libexecdir = @libexecdir@
 libfizmo_CFLAGS = @libfizmo_CFLAGS@
 libfizmo_LIBS = @libfizmo_LIBS@
+libfreetype2_CFLAGS = @libfreetype2_CFLAGS@
+libfreetype2_LIBS = @libfreetype2_LIBS@
 localedir = $(datarootdir)/fizmo/locales
 localstatedir = @localstatedir@
 mandir = @mandir@
@@ -297,11 +299,11 @@ AUTOMAKE_OPTIONS = subdir-objects
 
 # Path elements are seperated by colons.
 #AM_CFLAGS += -DFONT_DEFAULT_SEARCH_PATH=\"$(fontdir):.\"
-AM_CFLAGS = $(libfizmo_CFLAGS) $(freetype2_CFLAGS) -fPIC \
+AM_CFLAGS = $(libfizmo_CFLAGS) $(libfreetype2_CFLAGS) -fPIC \
 	-DFONT_DEFAULT_SEARCH_PATH=\"$(fontdir)\" $(am__append_1) \
 	$(libdrilbo_CFLAGS)
 AM_CPPFLAGS = 
-LDADD = $(libfizmo_LIBS) $(freetype2_LIBS) $(libdrilbo_LIBS)
+LDADD = $(libfizmo_LIBS) $(flibreetype2_LIBS) $(libdrilbo_LIBS)
 fontdir = $(datarootdir)/fizmo/fonts
 noinst_LIBRARIES = libpixelif.a
 libpixelif_a_SOURCES = ../locales/libpixelif_locales.c pixel_interface.c \

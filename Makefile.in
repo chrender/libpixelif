@@ -279,6 +279,8 @@ INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LDFLAGS = @LDFLAGS@
+LIBFREETYPE2_NONPKG_CFLAGS = @LIBFREETYPE2_NONPKG_CFLAGS@
+LIBFREETYPE2_NONPKG_LIBS = @LIBFREETYPE2_NONPKG_LIBS@
 LIBOBJS = @LIBOBJS@
 LIBPIXELIF_REQS = @LIBPIXELIF_REQS@
 LIBS = @LIBS@
@@ -321,8 +323,6 @@ datarootdir = @datarootdir@
 docdir = @docdir@
 dvidir = @dvidir@
 exec_prefix = @exec_prefix@
-freetype2_CFLAGS = @freetype2_CFLAGS@
-freetype2_LIBS = @freetype2_LIBS@
 host_alias = @host_alias@
 htmldir = @htmldir@
 includedir = @includedir@
@@ -334,6 +334,8 @@ libdrilbo_LIBS = @libdrilbo_LIBS@
 libexecdir = @libexecdir@
 libfizmo_CFLAGS = @libfizmo_CFLAGS@
 libfizmo_LIBS = @libfizmo_LIBS@
+libfreetype2_CFLAGS = @libfreetype2_CFLAGS@
+libfreetype2_LIBS = @libfreetype2_LIBS@
 localedir = $(datarootdir)/fizmo/locales
 localstatedir = @localstatedir@
 mandir = @mandir@
@@ -870,10 +872,11 @@ install-dev:: libpixelif.a
 	echo 'Name: libpixelif' >>$(pkgfile)
 	echo 'Description: libpixelif' >>$(pkgfile)
 	echo 'Version: 0.8.4' >>$(pkgfile)
-	echo 'Requires: libfizmo >= 0.7.15, libdrilbo >= 0.2.11, $(LIBPIXELIF_REQS)' >>$(pkgfile)
+	echo 'Requires: $(LIBPIXELIF_REQS)'>>$(pkgfile)
 	echo 'Requires.private:' >>$(pkgfile)
 	echo 'Cflags: -I$(pkg_prefix)/include/fizmo' >>$(pkgfile)
-	echo 'Libs: -L$(pkg_prefix)/lib/fizmo -lpixelif -ldrilbo' >>$(pkgfile)
+	echo 'Libs: -L$(pkg_prefix)/lib/fizmo -lpixelif $(LIBFREETYPE2_NONPKG_LIBS)' >>$(pkgfile)
+	echo 'Libs.private:' >>$(pkgfile)
 	echo >>$(pkgfile)
 
 install-data-local:
