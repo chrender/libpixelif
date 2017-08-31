@@ -42,7 +42,7 @@ AC_INIT(
  fizmo@spellbreaker.org,
  libpixelif)
 
-libpixelif_reqs="freetype2"
+libpixelif_reqs="libfizmo >= 0.7.15, libdrilbo >= 0.2.11"
 PKG_CHECK_MODULES([libfizmo], [libfizmo >= 0.7.15])
 PKG_CHECK_MODULES([libdrilbo], [libdrilbo >= 0.2.11])
 m4_include(config-libs.m4)
@@ -56,6 +56,8 @@ AM_PROG_AR
 AM_CONDITIONAL([FIZMO_DIST_BUILD], [test "x" = ""])
 
 AC_SUBST([LIBPIXELIF_REQS], $libpixelif_reqs)
+AC_SUBST([LIBFREETYPE2_NONPKG_CFLAGS], $libfreetype2_nonpkg_cflags)
+AC_SUBST([LIBFREETYPE2_NONPKG_LIBS], $libfreetype2_nonpkg_libs)
 
 AM_CONDITIONAL([ENABLE_TRACING],
                 [test "$enable_tracing" = "yes"])
