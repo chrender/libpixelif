@@ -590,6 +590,8 @@ LTLIBOBJS
 LIBOBJS
 ENABLE_TRACING_FALSE
 ENABLE_TRACING_TRUE
+LIBFREETYPE2_NONPKG_LIBS
+LIBFREETYPE2_NONPKG_CFLAGS
 LIBPIXELIF_REQS
 FIZMO_DIST_BUILD_FALSE
 FIZMO_DIST_BUILD_TRUE
@@ -640,8 +642,8 @@ am__isrc
 INSTALL_DATA
 INSTALL_SCRIPT
 INSTALL_PROGRAM
-freetype2_LIBS
-freetype2_CFLAGS
+libfreetype2_LIBS
+libfreetype2_CFLAGS
 libdrilbo_LIBS
 libdrilbo_CFLAGS
 libfizmo_LIBS
@@ -705,8 +707,8 @@ libfizmo_CFLAGS
 libfizmo_LIBS
 libdrilbo_CFLAGS
 libdrilbo_LIBS
-freetype2_CFLAGS
-freetype2_LIBS
+libfreetype2_CFLAGS
+libfreetype2_LIBS
 CC
 CFLAGS
 LDFLAGS
@@ -1359,10 +1361,10 @@ Some influential environment variables:
               C compiler flags for libdrilbo, overriding pkg-config
   libdrilbo_LIBS
               linker flags for libdrilbo, overriding pkg-config
-  freetype2_CFLAGS
-              C compiler flags for freetype2, overriding pkg-config
-  freetype2_LIBS
-              linker flags for freetype2, overriding pkg-config
+  libfreetype2_CFLAGS
+              C compiler flags for libfreetype2, overriding pkg-config
+  libfreetype2_LIBS
+              linker flags for libfreetype2, overriding pkg-config
   CC          C compiler command
   CFLAGS      C compiler flags
   LDFLAGS     linker flags, e.g. -L<lib dir> if you have libraries in a
@@ -1841,7 +1843,7 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
 
-libpixelif_reqs="freetype2"
+libpixelif_reqs="libfizmo >= 0.7.15, libdrilbo >= 0.2.11"
 
 
 
@@ -2147,11 +2149,11 @@ fi
 
 
 pkg_failed=no
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for freetype2" >&5
-$as_echo_n "checking for freetype2... " >&6; }
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for libfreetype2" >&5
+$as_echo_n "checking for libfreetype2... " >&6; }
 
-if test -n "$freetype2_CFLAGS"; then
-    pkg_cv_freetype2_CFLAGS="$freetype2_CFLAGS"
+if test -n "$libfreetype2_CFLAGS"; then
+    pkg_cv_libfreetype2_CFLAGS="$libfreetype2_CFLAGS"
  elif test -n "$PKG_CONFIG"; then
     if test -n "$PKG_CONFIG" && \
     { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"freetype2\""; } >&5
@@ -2159,7 +2161,7 @@ if test -n "$freetype2_CFLAGS"; then
   ac_status=$?
   $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
   test $ac_status = 0; }; then
-  pkg_cv_freetype2_CFLAGS=`$PKG_CONFIG --cflags "freetype2" 2>/dev/null`
+  pkg_cv_libfreetype2_CFLAGS=`$PKG_CONFIG --cflags "freetype2" 2>/dev/null`
 		      test "x$?" != "x0" && pkg_failed=yes
 else
   pkg_failed=yes
@@ -2167,8 +2169,8 @@ fi
  else
     pkg_failed=untried
 fi
-if test -n "$freetype2_LIBS"; then
-    pkg_cv_freetype2_LIBS="$freetype2_LIBS"
+if test -n "$libfreetype2_LIBS"; then
+    pkg_cv_libfreetype2_LIBS="$libfreetype2_LIBS"
  elif test -n "$PKG_CONFIG"; then
     if test -n "$PKG_CONFIG" && \
     { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"freetype2\""; } >&5
@@ -2176,7 +2178,7 @@ if test -n "$freetype2_LIBS"; then
   ac_status=$?
   $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
   test $ac_status = 0; }; then
-  pkg_cv_freetype2_LIBS=`$PKG_CONFIG --libs "freetype2" 2>/dev/null`
+  pkg_cv_libfreetype2_LIBS=`$PKG_CONFIG --libs "freetype2" 2>/dev/null`
 		      test "x$?" != "x0" && pkg_failed=yes
 else
   pkg_failed=yes
@@ -2197,22 +2199,22 @@ else
         _pkg_short_errors_supported=no
 fi
         if test $_pkg_short_errors_supported = yes; then
-	        freetype2_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "freetype2" 2>&1`
+	        libfreetype2_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "freetype2" 2>&1`
         else
-	        freetype2_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "freetype2" 2>&1`
+	        libfreetype2_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "freetype2" 2>&1`
         fi
 	# Put the nasty error message in config.log where it belongs
-	echo "$freetype2_PKG_ERRORS" >&5
+	echo "$libfreetype2_PKG_ERRORS" >&5
 
 	as_fn_error $? "Package requirements (freetype2) were not met:
 
-$freetype2_PKG_ERRORS
+$libfreetype2_PKG_ERRORS
 
 Consider adjusting the PKG_CONFIG_PATH environment variable if you
 installed software in a non-standard prefix.
 
-Alternatively, you may set the environment variables freetype2_CFLAGS
-and freetype2_LIBS to avoid the need to call pkg-config.
+Alternatively, you may set the environment variables libfreetype2_CFLAGS
+and libfreetype2_LIBS to avoid the need to call pkg-config.
 See the pkg-config man page for more details." "$LINENO" 5
 elif test $pkg_failed = untried; then
      	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
@@ -2223,18 +2225,23 @@ as_fn_error $? "The pkg-config script could not be found or is too old.  Make su
 is in your PATH or set the PKG_CONFIG environment variable to the full
 path to pkg-config.
 
-Alternatively, you may set the environment variables freetype2_CFLAGS
-and freetype2_LIBS to avoid the need to call pkg-config.
+Alternatively, you may set the environment variables libfreetype2_CFLAGS
+and libfreetype2_LIBS to avoid the need to call pkg-config.
 See the pkg-config man page for more details.
 
 To get pkg-config, see <http://pkg-config.freedesktop.org/>.
 See \`config.log' for more details" "$LINENO" 5; }
 else
-	freetype2_CFLAGS=$pkg_cv_freetype2_CFLAGS
-	freetype2_LIBS=$pkg_cv_freetype2_LIBS
+	libfreetype2_CFLAGS=$pkg_cv_libfreetype2_CFLAGS
+	libfreetype2_LIBS=$pkg_cv_libfreetype2_LIBS
         { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
+	if test "x$libpixelif_reqs" != "x"; then :
 
+     libpixelif_reqs+=", "
+
+fi
+   libpixelif_reqs+="freetype2"
 fi
 
 
@@ -4161,6 +4168,10 @@ fi
 
 
 LIBPIXELIF_REQS=$libpixelif_reqs
+
+LIBFREETYPE2_NONPKG_CFLAGS=$libfreetype2_nonpkg_cflags
+
+LIBFREETYPE2_NONPKG_LIBS=$libfreetype2_nonpkg_libs
 
 
  if test "$enable_tracing" = "yes"; then
