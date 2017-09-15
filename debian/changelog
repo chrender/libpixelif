@@ -1,3 +1,14 @@
+libpixelif (0.8.4-3) unstable; urgency=low
+
+  * Made libpixelif require at least version 0.7.15 of libfizmo-dev and
+    version 0.2.11 of libdrilbo-dev due to build changes.
+  * Made libpixelif-dev require at least version 0.8.3 of libpixelif-common
+    due to requirement of en_GB instead of the en_US hyphenation patterns.
+  * Removed "Vcs-Git" field from control file.
+
+ -- Christoph Ender <christoph.ender@spellbreaker.org>  Thu, 14 Sep 2017 22:10:00 +0200
+
+
 libpixelif (0.8.4-2) unstable; urgency=low
 
   * Switched priority from "extra" to "optional".
