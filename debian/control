@@ -17,6 +17,7 @@ Vcs-Browser: https://github.com/chrender/libpixelif
 Package: libpixelif-common
 Architecture: all
 Depends: fonts-noto,
+ fonts-noto-mono,
  ${misc:Depends}
 Description: Provides localization and font data for libpixelif
  This package is required by all packages which are using libpixelif. It's
