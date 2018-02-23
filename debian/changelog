@@ -8,8 +8,9 @@ libpixelif (0.8.4-3) unstable; urgency=low
     due to requirement of en_GB instead of the en_US hyphenation patterns.
   * Removed "Vcs-Git" field from control file.
   * Adapt pkgconfig-path for cross-compilation.
+  * Updated standards version to 4.1.3.
 
- -- Christoph Ender <christoph.ender@spellbreaker.org>  Fri, 23 Feb 2018 18:15:00 +0100
+ -- Christoph Ender <christoph.ender@spellbreaker.org>  Fri, 23 Feb 2018 18:30:00 +0100
 
 
 libpixelif (0.8.4-2) unstable; urgency=low
