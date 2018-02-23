@@ -1,0 +1,23 @@
+Add ${DEB_HOST_MULTIARCH} to pkg-config path.
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -44,7 +44,7 @@
+   pkg_prefix=$(prefix)
+ endif
+ 
+-pkg_dir = $(dev_prefix)/lib/pkgconfig
++pkg_dir = $(dev_prefix)/lib/${DEB_HOST_MULTIARCH}/pkgconfig
+ pkgfile = $(pkg_dir)/libpixelif.pc
+ 
+ SUBDIRS = src/pixel_interface .
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -362,7 +362,7 @@
+ @FIZMO_DIST_BUILD_TRUE@dev_prefix = $(FIZMO_DIST_BUILD_PREFIX)
+ @FIZMO_DIST_BUILD_FALSE@pkg_prefix = $(prefix)
+ @FIZMO_DIST_BUILD_TRUE@pkg_prefix = $(FIZMO_DIST_BUILD_PREFIX)
+-pkg_dir = $(dev_prefix)/lib/pkgconfig
++pkg_dir = $(dev_prefix)/lib/${DEB_HOST_MULTIARCH}/pkgconfig
+ pkgfile = $(pkg_dir)/libpixelif.pc
+ SUBDIRS = src/pixel_interface .
+ noinst_LIBRARIES = libpixelif.a
