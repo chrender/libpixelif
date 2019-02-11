@@ -40,7 +40,7 @@ AC_ARG_ENABLE([tracing],
 
 AC_INIT(
  [libpixelif],
- [0.8.4],
+ [0.8.5],
  fizmo@spellbreaker.org,
  libpixelif)
 

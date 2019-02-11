@@ -71,7 +71,7 @@ install-dev:: libpixelif.a
 	echo >>$(pkgfile)
 	echo 'Name: libpixelif' >>$(pkgfile)
 	echo 'Description: libpixelif' >>$(pkgfile)
-	echo 'Version: 0.8.4' >>$(pkgfile)
+	echo 'Version: 0.8.5' >>$(pkgfile)
 	echo 'Requires: $(LIBPIXELIF_REQS)'>>$(pkgfile)
 	echo 'Requires.private:' >>$(pkgfile)
 	echo 'Cflags: -I$(pkg_prefix)/include/fizmo' >>$(pkgfile)

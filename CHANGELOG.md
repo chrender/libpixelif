@@ -1,6 +1,14 @@
 
 
 
+   **Version 0.8.5 — Febuary 11, 2019**
+
+ - Fix includes to avoid configure-error when “disable-x11” was active.
+ - Fixes underscores in markdown documentation.
+
+---
+
+
    **Version 0.8.4 — September 3, 2017**
 
  - Fix superfluous libraries and includes during install when using $DESTDIR, addressing github issue #21.
@@ -14,10 +22,10 @@
 
    **Version 0.8.3 — April 9, 2017**
 
- - Adapted to replacement of en_US locale with en_GB from libfizmo.
+ - Adapted to replacement of en\_US locale with en\_GB from libfizmo.
  - Fixed missing opening screen and disappearing prompt during timed input in “eliza.z5”. Thanks to Stephen Gutknecht for reporting the problem.
  - Fixed overlong reverse chars. This corrects several ASCII art problems as in Photopia, Nameless and ZChess, as well as in several opening screens. Thanks to Stephen Gutknecht.
- - Fixed incomplete flush function in true_type_wordwrapper.c. This corrects the incorrect display of the startup-screens in “AtWork.z5” and “Photopia”. Thanks to Stephen Gutknecht for reporting the problem.
+ - Fixed incomplete flush function in true\_type\_wordwrapper.c. This corrects the incorrect display of the startup-screens in “AtWork.z5” and “Photopia”. Thanks to Stephen Gutknecht for reporting the problem.
  - Raised version number into 0.8 range to comply with general version scheme for new modules.
 
 ---
