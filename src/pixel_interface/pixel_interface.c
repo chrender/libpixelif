@@ -1727,10 +1727,10 @@ static void link_interface_to_story(struct z_story *story) {
   font_factory = create_true_type_factory(font_search_path);
 
   if (regular_font_filename == NULL) {
-    set_configuration_value("regular-font", "FiraSans-Regular.ttf");
-    set_configuration_value("italic-font", "FiraSans-RegularItalic.ttf");
-    set_configuration_value("bold-font", "FiraSans-Medium.ttf");
-    set_configuration_value("bold-italic-font", "FiraSans-MediumItalic.ttf");
+    set_configuration_value("regular-font", "FiraGO-Regular.ttf");
+    set_configuration_value("italic-font", "FiraGO-Italic.ttf");
+    set_configuration_value("bold-font", "FiraGO-Medium.ttf");
+    set_configuration_value("bold-italic-font", "FiraGO-MediumItalic.ttf");
 
     set_configuration_value("fixed-regular-font", "FiraMono-Regular.ttf");
     set_configuration_value("fixed-italic-font", "FiraMono-Regular.ttf");

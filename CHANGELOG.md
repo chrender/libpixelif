@@ -1,8 +1,9 @@
 
 
 
-   **Version 0.8.5 — Febuary 11, 2019**
+   **Version 0.8.5 — Febuary 21, 2019**
 
+ - Replaced Fira Sans with FiraGO.
  - Fix includes to avoid configure-error when “disable-x11” was active.
  - Fixes underscores in markdown documentation.
 
