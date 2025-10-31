@@ -111,13 +111,14 @@ install(DIRECTORY "${PROJECT_SOURCE_DIR}/src/" # source directory
 
 install(TARGETS pixelif)
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc
-  DESTINATION "lib/pkgconfig")
-
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/fonts
   DESTINATION "fonts")
 
 set(pc_libs_private)
+set(pc_req_public "freetype2")
 set(pc_req_private)
 configure_file(src/libpixelif.pc.in libpixelif.pc @ONLY)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc
+  DESTINATION "lib/pkgconfig")
 
