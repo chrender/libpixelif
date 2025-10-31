@@ -64,6 +64,7 @@
 #include "true_type_font.h"
 #include "../screen_interface/screen_pixel_interface.h"
 #include "../locales/libpixelif_locales.h"
+#include "../locales/locale_data.h"
 
 #include <drilbo/drilbo.h>
 #include <drilbo/drilbo-jpeg.h>
@@ -4436,6 +4437,13 @@ void fizmo_register_screen_pixel_interface(struct z_screen_pixel_interface
   if (screen_pixel_interface == NULL) {
     TRACE_LOG("Registering screen pixel interface at %p.\n",
         new_screen_pixel_interface);
+
+    TRACE_LOG("Initializing pixelif locales.\n");
+    init_libpixelif_locales();
+
+    TRACE_LOG("Registering pixelif locale module.\n");
+    register_locale_module(
+      locale_module_libpixelif.module_name, &locale_module_libpixelif);
 
     screen_pixel_interface = new_screen_pixel_interface;
     set_configuration_value("enable-font3-conversion", "true");
