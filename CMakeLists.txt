@@ -86,7 +86,7 @@ endif()
 
 add_definitions(-DFONT_DEFAULT_SEARCH_PATH="${CMAKE_INSTALL_PREFIX}/fonts")
 
-set (MyCSources
+set (c_sources
   src/pixel_interface/pixel_interface.c
   src/pixel_interface/true_type_factory.c
   src/pixel_interface/true_type_font.c
@@ -95,9 +95,15 @@ set (MyCSources
   src/locales/locale_data.c
   src/locales/locale_data.h)
 
-add_library(pixelif ${MyCSources})
-target_include_directories(pixelif PUBLIC ${LIBFIZMO_INCLUDE_DIRS} ${FREETYPE2_INCLUDE_DIRS})
-target_link_directories(pixelif PUBLIC ${LIBFIZMO_LIBDIR} ${FREETYPE2_LIBDIR})
+add_library(pixelif ${c_sources})
+
+target_include_directories(pixelif PUBLIC
+  ${LIBFIZMO_INCLUDE_DIRS}
+  ${FREETYPE2_INCLUDE_DIRS})
+
+target_link_directories(pixelif PUBLIC
+  ${LIBFIZMO_LIBDIR}
+  ${FREETYPE2_LIBDIR})
 
 #install(TARGETS libpixelif)
 # PUBLIC_HEADER cannot be used for TARGETS fizmo, since it doesn't keep
